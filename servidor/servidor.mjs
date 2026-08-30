@@ -466,6 +466,44 @@ const servidor = http.createServer((req, res) => {
     }));
   }
 
+  // Medidor de velocidade. O app usa para saber que qualidade a internet de quem
+  // transmite aguenta, em vez de deixar a pessoa escolher 4K num link que não sobe 2 Mb/s.
+  if (caminho === '/medir') {
+    if (req.method === 'POST') {
+      let recebido = 0;
+      const comeco = process.hrtime.bigint();
+      req.on('data', (p) => {
+        recebido += p.length;
+        if (recebido > 64 * 1024 * 1024) req.destroy();  // teto de sanidade
+      });
+      req.on('end', () => {
+        const ms = Number(process.hrtime.bigint() - comeco) / 1e6;
+        responder(res, 200, 'application/json', JSON.stringify({ bytes: recebido, ms }));
+      });
+      req.on('error', () => {});
+      return;
+    }
+    // GET devolve bytes para medir a descida.
+    const quanto = Math.min(Number(url.searchParams.get('bytes')) || 2_000_000, 32 * 1024 * 1024);
+    res.writeHead(200, {
+      'content-type': 'application/octet-stream',
+      'content-length': quanto,
+      'cache-control': 'no-store',
+    });
+    const bloco = Buffer.alloc(64 * 1024);
+    let restante = quanto;
+    const escrever = () => {
+      while (restante > 0) {
+        const pedaco = restante >= bloco.length ? bloco : bloco.subarray(0, restante);
+        restante -= pedaco.length;
+        if (!res.write(pedaco)) return res.once('drain', escrever);
+      }
+      res.end();
+    };
+    escrever();
+    return;
+  }
+
   const mSala = caminho.match(/^\/s\/([A-Za-z0-9]{1,12})$/);
   if (mSala) {
     const codigo = mSala[1].toUpperCase();
