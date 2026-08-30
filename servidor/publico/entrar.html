@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Entrar na sala {{CODIGO}} — QubitsCast</title>
+<style>
+  :root{
+    --fundo:#0e1015; --painel:#171a21; --borda:#252a34; --texto:#e6e8ee;
+    --suave:#9aa1ad; --acento:#5b8cff; --acento-forte:#7aa2ff; --ok:#3fbf7f;
+    --r:14px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; min-height:100vh; display:grid; place-items:center; padding:24px;
+    background:radial-gradient(1000px 600px at 50% -10%,#1b2030 0%,var(--fundo) 60%);
+    color:var(--texto);
+    font:15px/1.5 "Segoe UI",system-ui,-apple-system,sans-serif;
+  }
+  .cartao{
+    width:100%; max-width:440px; background:var(--painel);
+    border:1px solid var(--borda); border-radius:20px; padding:32px;
+    box-shadow:0 24px 60px rgba(0,0,0,.5);
+  }
+  .marca{display:flex; align-items:center; gap:10px; margin-bottom:24px}
+  .marca svg{width:30px;height:30px;flex:none}
+  .marca b{font-size:17px; letter-spacing:-.2px}
+  h1{font-size:22px; margin:0 0 6px; letter-spacing:-.3px}
+  p{margin:0 0 20px; color:var(--suave)}
+  .codigo{
+    font:600 30px/1 ui-monospace,"Cascadia Mono",Consolas,monospace;
+    letter-spacing:6px; text-align:center; padding:18px;
+    background:#11141a; border:1px solid var(--borda); border-radius:var(--r);
+    margin-bottom:20px; user-select:all;
+  }
+  .estado{
+    display:flex; align-items:center; gap:8px; justify-content:center;
+    font-size:13px; color:var(--suave); margin-bottom:22px;
+  }
+  .bolinha{width:8px;height:8px;border-radius:50%;background:var(--ok);flex:none}
+  .bolinha.off{background:#5b6270}
+  a.botao,button{
+    display:block; width:100%; text-align:center; text-decoration:none;
+    padding:13px 18px; border-radius:var(--r); border:1px solid transparent;
+    font:600 15px/1.2 inherit; cursor:pointer; margin-bottom:10px;
+    transition:background .15s ease,border-color .15s ease;
+  }
+  .primario{background:var(--acento); color:#fff}
+  .primario:hover{background:var(--acento-forte)}
+  .secundario{background:transparent; color:var(--texto); border-color:var(--borda)}
+  .secundario:hover{border-color:#39404e; background:#1c2029}
+  .ajuda{font-size:12.5px; color:var(--suave); text-align:center; margin:16px 0 0; line-height:1.6}
+  .ajuda code{background:#11141a;padding:2px 6px;border-radius:6px;border:1px solid var(--borda)}
+</style>
+</head>
+<body>
+  <main class="cartao">
+    <div class="marca">
+      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <rect x="2" y="5" width="28" height="19" rx="4" stroke="#5b8cff" stroke-width="2.2"/>
+        <path d="M11 28h10" stroke="#5b8cff" stroke-width="2.2" stroke-linecap="round"/>
+        <circle cx="16" cy="14.5" r="3.6" fill="#5b8cff"/>
+        <path d="M21.5 9.5a7 7 0 0 1 0 10M10.5 19.5a7 7 0 0 1 0-10" stroke="#7aa2ff" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+      <b>QubitsCast</b>
+    </div>
+
+    <h1>{{NOME}}</h1>
+    <p>Você foi convidado para uma sala de transmissão de tela.</p>
+
+    <div class="codigo">{{CODIGO}}</div>
+
+    <div class="estado">
+      <span class="bolinha" id="bolinha"></span>
+      <span id="texto-estado">verificando…</span>
+    </div>
+
+    <a class="botao primario" id="abrir" href="qubitscast://entrar/{{CODIGO}}">Entrar na sala</a>
+    <a class="botao secundario" href="{{DOWNLOAD}}">Ainda não tenho o aplicativo</a>
+
+    <p class="ajuda">
+      O botão acima abre o QubitsCast que já está instalado no seu PC.<br>
+      Se preferir, abra o aplicativo e digite o código <code>{{CODIGO}}</code>.
+    </p>
+  </main>
+
+<script>
+  const codigo = "{{CODIGO}}";
+  const existe = "{{EXISTE}}" === "1";
+  const pessoas = Number("{{PESSOAS}}");
+  const bolinha = document.getElementById('bolinha');
+  const estado = document.getElementById('texto-estado');
+
+  function pintar(existe, pessoas) {
+    if (!existe) {
+      bolinha.classList.add('off');
+      estado.textContent = 'sala fechada ou expirada';
+      return;
+    }
+    bolinha.classList.remove('off');
+    estado.textContent = pessoas === 1 ? '1 pessoa na sala' : pessoas + ' pessoas na sala';
+  }
+  pintar(existe, pessoas);
+
+  // Mantém o contador acordado enquanto a pessoa decide.
+  setInterval(async () => {
+    try {
+      const r = await fetch('/api/sala?codigo=' + encodeURIComponent(codigo), { cache: 'no-store' });
+      const d = await r.json();
+      pintar(!!d.existe, d.pessoas || 0);
+    } catch {}
+  }, 5000);
+
+  // Tenta abrir o app sozinho uma vez; se nada acontecer, os botões ficam aí.
+  if (existe) setTimeout(() => { location.href = 'qubitscast://entrar/' + codigo; }, 400);
+</script>
+</body>
+</html>

@@ -1,0 +1,319 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+
+    <!-- ============ cores ============ -->
+    <Color x:Key="CorFundo">#0E1015</Color>
+    <Color x:Key="CorPainel">#171A21</Color>
+    <Color x:Key="CorPainelAlto">#1C2029</Color>
+    <Color x:Key="CorBorda">#252A34</Color>
+    <Color x:Key="CorBordaViva">#39404E</Color>
+    <Color x:Key="CorTexto">#E6E8EE</Color>
+    <Color x:Key="CorSuave">#9AA1AD</Color>
+    <Color x:Key="CorApagado">#6B7280</Color>
+    <Color x:Key="CorAcento">#5B8CFF</Color>
+    <Color x:Key="CorAcentoForte">#7AA2FF</Color>
+    <Color x:Key="CorPerigo">#E5484D</Color>
+    <Color x:Key="CorPerigoForte">#F2585D</Color>
+    <Color x:Key="CorOk">#3FBF7F</Color>
+
+    <SolidColorBrush x:Key="Fundo" Color="{StaticResource CorFundo}"/>
+    <SolidColorBrush x:Key="Painel" Color="{StaticResource CorPainel}"/>
+    <SolidColorBrush x:Key="PainelAlto" Color="{StaticResource CorPainelAlto}"/>
+    <SolidColorBrush x:Key="Borda" Color="{StaticResource CorBorda}"/>
+    <SolidColorBrush x:Key="BordaViva" Color="{StaticResource CorBordaViva}"/>
+    <SolidColorBrush x:Key="Texto" Color="{StaticResource CorTexto}"/>
+    <SolidColorBrush x:Key="Suave" Color="{StaticResource CorSuave}"/>
+    <SolidColorBrush x:Key="Apagado" Color="{StaticResource CorApagado}"/>
+    <SolidColorBrush x:Key="Acento" Color="{StaticResource CorAcento}"/>
+    <SolidColorBrush x:Key="AcentoForte" Color="{StaticResource CorAcentoForte}"/>
+    <SolidColorBrush x:Key="Perigo" Color="{StaticResource CorPerigo}"/>
+    <SolidColorBrush x:Key="PerigoForte" Color="{StaticResource CorPerigoForte}"/>
+    <SolidColorBrush x:Key="Ok" Color="{StaticResource CorOk}"/>
+
+    <!-- ============ escala ============ -->
+    <sys:Double x:Key="TipoMiudo">12</sys:Double>
+    <sys:Double x:Key="TipoPequeno">13</sys:Double>
+    <sys:Double x:Key="TipoBase">14</sys:Double>
+    <sys:Double x:Key="TipoMedio">16</sys:Double>
+    <sys:Double x:Key="TipoGrande">22</sys:Double>
+    <CornerRadius x:Key="RaioPequeno">8</CornerRadius>
+    <CornerRadius x:Key="RaioMedio">12</CornerRadius>
+    <CornerRadius x:Key="RaioGrande">16</CornerRadius>
+
+    <FontFamily x:Key="Fonte">Segoe UI</FontFamily>
+    <FontFamily x:Key="FonteMono">Consolas</FontFamily>
+
+    <!-- ============ texto ============ -->
+    <Style TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Fonte}"/>
+        <Setter Property="Foreground" Value="{StaticResource Texto}"/>
+        <Setter Property="FontSize" Value="{StaticResource TipoBase}"/>
+        <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+        <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
+    </Style>
+
+    <Style x:Key="Titulo" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Fonte}"/>
+        <Setter Property="Foreground" Value="{StaticResource Texto}"/>
+        <Setter Property="FontSize" Value="{StaticResource TipoGrande}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+
+    <Style x:Key="Legenda" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Fonte}"/>
+        <Setter Property="Foreground" Value="{StaticResource Suave}"/>
+        <Setter Property="FontSize" Value="{StaticResource TipoPequeno}"/>
+    </Style>
+
+    <!-- ============ botões ============ -->
+    <Style x:Key="BotaoBase" TargetType="Button">
+        <Setter Property="FontFamily" Value="{StaticResource Fonte}"/>
+        <Setter Property="FontSize" Value="{StaticResource TipoBase}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource Texto}"/>
+        <Setter Property="Background" Value="{StaticResource PainelAlto}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource Borda}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="16,10"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="fundo"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{StaticResource RaioPequeno}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          Margin="{TemplateBinding Padding}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="fundo" Property="BorderBrush" Value="{StaticResource BordaViva}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="fundo" Property="Opacity" Value="0.45"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="BotaoPrimario" TargetType="Button" BasedOn="{StaticResource BotaoBase}">
+        <Setter Property="Background" Value="{StaticResource Acento}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource Acento}"/>
+        <Setter Property="Foreground" Value="White"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="fundo" Background="{TemplateBinding Background}"
+                            CornerRadius="{StaticResource RaioPequeno}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          Margin="{TemplateBinding Padding}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="fundo" Property="Background" Value="{StaticResource AcentoForte}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="fundo" Property="Opacity" Value="0.45"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="BotaoPerigo" TargetType="Button" BasedOn="{StaticResource BotaoPrimario}">
+        <Setter Property="Background" Value="{StaticResource Perigo}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="fundo" Background="{TemplateBinding Background}"
+                            CornerRadius="{StaticResource RaioPequeno}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          Margin="{TemplateBinding Padding}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="fundo" Property="Background" Value="{StaticResource PerigoForte}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Botão pequeno de barra, sem moldura até o mouse chegar. -->
+    <Style x:Key="BotaoDiscreto" TargetType="Button" BasedOn="{StaticResource BotaoBase}">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource Suave}"/>
+        <Setter Property="Padding" Value="12,8"/>
+        <Setter Property="FontWeight" Value="Normal"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="fundo" Background="{TemplateBinding Background}"
+                            CornerRadius="{StaticResource RaioPequeno}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          Margin="{TemplateBinding Padding}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="fundo" Property="Background" Value="{StaticResource PainelAlto}"/>
+                            <Setter Property="Foreground" Value="{StaticResource Texto}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="fundo" Property="Opacity" Value="0.4"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ============ campos ============ -->
+    <Style TargetType="TextBox">
+        <Setter Property="FontFamily" Value="{StaticResource Fonte}"/>
+        <Setter Property="FontSize" Value="{StaticResource TipoBase}"/>
+        <Setter Property="Foreground" Value="{StaticResource Texto}"/>
+        <Setter Property="CaretBrush" Value="{StaticResource Acento}"/>
+        <Setter Property="SelectionBrush" Value="{StaticResource Acento}"/>
+        <Setter Property="Background" Value="#11141A"/>
+        <Setter Property="BorderBrush" Value="{StaticResource Borda}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="12,10"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="fundo" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{StaticResource RaioPequeno}">
+                        <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"
+                                      VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                            <Setter TargetName="fundo" Property="BorderBrush" Value="{StaticResource Acento}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="ComboBox">
+        <Setter Property="FontFamily" Value="{StaticResource Fonte}"/>
+        <Setter Property="FontSize" Value="{StaticResource TipoBase}"/>
+        <Setter Property="Foreground" Value="{StaticResource Texto}"/>
+        <Setter Property="Background" Value="#11141A"/>
+        <Setter Property="BorderBrush" Value="{StaticResource Borda}"/>
+        <Setter Property="Padding" Value="12,9"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="ItemContainerStyle">
+            <Setter.Value>
+                <Style TargetType="ComboBoxItem">
+                    <Setter Property="Foreground" Value="{StaticResource Texto}"/>
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="Padding" Value="12,9"/>
+                    <Setter Property="FontFamily" Value="{StaticResource Fonte}"/>
+                    <Setter Property="FontSize" Value="{StaticResource TipoBase}"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ComboBoxItem">
+                                <Border x:Name="b" Background="{TemplateBinding Background}"
+                                        Padding="{TemplateBinding Padding}" CornerRadius="6" Margin="4,2">
+                                    <ContentPresenter/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsHighlighted" Value="True">
+                                        <Setter TargetName="b" Property="Background" Value="{StaticResource PainelAlto}"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid>
+                        <ToggleButton x:Name="PART_Alternador" Focusable="False" ClickMode="Press"
+                                      IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <Border x:Name="fundo" Background="{StaticResource PainelAlto}"
+                                            BorderBrush="{StaticResource Borda}" BorderThickness="1"
+                                            CornerRadius="{StaticResource RaioPequeno}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ContentPresenter Grid.Column="0" Margin="12,9"
+                                                              HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                                            <Path Grid.Column="1" Margin="0,0,12,0" VerticalAlignment="Center"
+                                                  Data="M0,0 L4.5,5 L9,0" Stroke="{StaticResource Suave}"
+                                                  StrokeThickness="1.6" StrokeEndLineCap="Round"
+                                                  StrokeStartLineCap="Round"/>
+                                        </Grid>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="fundo" Property="BorderBrush" Value="{StaticResource BordaViva}"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                            <ContentPresenter Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"/>
+                        </ToggleButton>
+                        <Popup IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom"
+                               AllowsTransparency="True" PopupAnimation="Fade" Focusable="False">
+                            <Border Background="{StaticResource Painel}" BorderBrush="{StaticResource Borda}"
+                                    BorderThickness="1" CornerRadius="{StaticResource RaioPequeno}"
+                                    MinWidth="{TemplateBinding ActualWidth}" Margin="0,4,0,0">
+                                <ScrollViewer MaxHeight="320">
+                                    <ItemsPresenter/>
+                                </ScrollViewer>
+                            </Border>
+                        </Popup>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ============ barra de rolagem enxuta ============ -->
+    <Style TargetType="ScrollBar">
+        <Setter Property="Width" Value="8"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ScrollBar">
+                    <Track x:Name="PART_Track" IsDirectionReversed="True">
+                        <Track.Thumb>
+                            <Thumb>
+                                <Thumb.Template>
+                                    <ControlTemplate TargetType="Thumb">
+                                        <Border Background="{StaticResource BordaViva}" CornerRadius="4" Margin="2,0"/>
+                                    </ControlTemplate>
+                                </Thumb.Template>
+                            </Thumb>
+                        </Track.Thumb>
+                    </Track>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>

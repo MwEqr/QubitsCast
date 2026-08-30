@@ -1,0 +1,21 @@
+# saída de compilação (fica no D: por causa do espaço no C:)
+bin/
+obj/
+Directory.Build.props
+
+# o ffmpeg é baixado pelo preparar-ffmpeg.ps1, não versionado (mais de 100 MB)
+app/Recursos/ffmpeg/
+instalador/ffmpeg/
+instalador/saida/
+instalador/app/
+
+# ambiente
+.env
+*.user
+*.suo
+.vs/
+node_modules/
+
+# arquivos de trabalho
+*.log
+*.bgra

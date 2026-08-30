@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+
+    <AssemblyName>QubitsCast</AssemblyName>
+    <RootNamespace>QubitsCast</RootNamespace>
+    <ApplicationIcon>Recursos\qubitscast.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>1.0.0</Version>
+    <FileVersion>1.0.0.0</FileVersion>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <Product>QubitsCast</Product>
+    <Company>QubitsLab</Company>
+    <Description>Transmissão de tela em alta qualidade</Description>
+    <Copyright>QubitsLab</Copyright>
+    <NeutralLanguage>pt-BR</NeutralLanguage>
+
+    <!-- App de bandeja/janela: nada de console piscando ao subir o ffmpeg. -->
+    <DebugType>embedded</DebugType>
+    <SatelliteResourceLanguages>pt-BR;en</SatelliteResourceLanguages>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="Concentus" Version="2.2.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Recursos\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

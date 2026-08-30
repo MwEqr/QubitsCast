@@ -1,0 +1,1 @@
+@GLOBALMEMORY.md
