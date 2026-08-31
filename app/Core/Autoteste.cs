@@ -26,7 +26,8 @@ public static class Autoteste
                 "anfitriao" => await AnfitriaoAsync(args[2], args[3],
                     args.Length > 4 ? int.Parse(args[4]) : 1280,
                     args.Length > 5 ? int.Parse(args[5]) : 30,
-                    args.Length > 6 ? int.Parse(args[6]) : 4),
+                    args.Length > 6 ? int.Parse(args[6]) : 4,
+                    args.Length > 7 ? int.Parse(args[7]) : 26),
                 "espectador" => await EspectadorAsync(args[2], args[3], args[4]),
                 _ => Erro("papel desconhecido: " + papel),
             };
@@ -53,7 +54,7 @@ public static class Autoteste
     // ------------------------------------------------------------------ anfitrião
 
     private static async Task<int> AnfitriaoAsync(string servidor, string relatorio,
-                                                   int largura, int fps, int mbps)
+                                                   int largura, int fps, int mbps, int segundos)
     {
         File.WriteAllText(relatorio, "", Encoding.UTF8);
         Anotar(relatorio, "papel=anfitriao");
@@ -96,7 +97,7 @@ public static class Autoteste
         Anotar(relatorio, $"transmitindo={transmissor.Largura}x{transmissor.Altura}@{transmissor.Fps}");
 
         // Fica no ar tempo suficiente para o espectador entrar, sincronizar e medir.
-        await Task.Delay(26_000);
+        await Task.Delay(Math.Clamp(segundos, 5, 600) * 1000);
 
         transmissor.Parar();
         Anotar(relatorio, $"media-fps={(amostras > 0 ? somaFps / amostras : 0)}");

@@ -265,8 +265,8 @@
                         <ComboBox x:Name="SeletorMonitor" Grid.Column="1" Width="188" Margin="0,0,8,0"
                                   ToolTip="Qual tela transmitir"/>
 
-                        <ComboBox x:Name="SeletorQualidade" Grid.Column="2" Width="212"
-                                  ToolTip="Resolução e quadros por segundo"/>
+                        <ComboBox x:Name="SeletorQualidade" Grid.Column="2" Width="232"
+                                  ToolTip="Resolução, quadros por segundo e quanto gasta de internet"/>
 
                         <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center"
                                     Margin="0,0,10,0">

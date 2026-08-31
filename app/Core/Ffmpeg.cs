@@ -107,12 +107,12 @@ public static class Ffmpeg
         var cap = new Capacidades(encoder, ddagrab);
         Registro.Escrever($"capacidades: codificador={cap.Encoder} ddagrab={cap.UsarDdagrab}");
 
-        // Só guarda quando achou placa. Cair no processador pode ser azar do momento — a
-        // placa tem um número pequeno de codificações simultâneas, e um teste feito enquanto
-        // outra transmissão roda falha sem que a máquina seja incapaz. Guardar isso deixaria
-        // o app no modo lento para sempre; assim ele tenta de novo na próxima abertura.
-        if (cap.EncoderPorPlaca) GravarCache(assinatura, cap);
-        else Registro.Escrever("sem placa desta vez — vou testar de novo na próxima abertura");
+        // Só guarda o resultado bom. Cair no processador ou na captura simples pode ser azar
+        // do momento — a placa aceita um número pequeno de codificações e de capturas ao
+        // mesmo tempo, e um teste feito enquanto outra transmissão roda falha sem que a
+        // máquina seja incapaz. Guardar isso deixaria o app no modo lento para sempre.
+        if (cap.EncoderPorPlaca && cap.UsarDdagrab) GravarCache(assinatura, cap);
+        else Registro.Escrever("resultado abaixo do ideal — vou testar de novo na próxima abertura");
 
         return _capacidades = cap;
     }
@@ -173,12 +173,13 @@ public static class Ffmpeg
 
     private static bool RodarTeste(string nome, string argumentosSemSaida, int minimoBytes)
     {
+        // Nome novo a cada teste: sobra de um teste anterior ainda presa pelo ffmpeg fazia
+        // o File.Delete lançar, e a exceção era lida como "esta máquina não consegue" —
+        // foi assim que a captura pela placa apareceu como indisponível sem motivo.
         var saida = Path.Combine(Path.GetTempPath(),
-            $"qcast-teste-{nome.Replace(' ', '-')}-{Environment.ProcessId}.h264");
+            $"qcast-teste-{nome.Replace(' ', '-')}-{Guid.NewGuid():N}.h264");
         try
         {
-            if (File.Exists(saida)) File.Delete(saida);
-
             using var p = Iniciar(argumentosSemSaida + $"-y \"{saida}\"", redirecionarSaida: false);
             if (p is null) return false;
             if (!p.WaitForExit(25_000)) { MatarSilencioso(p); return false; }

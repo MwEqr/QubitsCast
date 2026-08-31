@@ -66,6 +66,13 @@ public partial class App : Application
         };
 
         base.OnStartup(e);
+
+        // A janela é criada aqui, e não por StartupUri no App.xaml, porque o StartupUri é
+        // processado pelo Run() depois deste método: no modo sem interface, sair mais cedo
+        // daqui não impediria a janela de abrir do mesmo jeito.
+        var janela = new JanelaPrincipal();
+        MainWindow = janela;
+        janela.Show();
     }
 
     protected override void OnExit(ExitEventArgs e)

@@ -42,6 +42,8 @@ public partial class JanelaPrincipal : Window
     private int _idTransmissorAtual;
     private string _linkAtual = "";
     private DispatcherTimer? _tempoAviso;
+    private bool _semPlaca;
+    private bool _servidorConferido;
 
     public JanelaPrincipal()
     {
@@ -73,7 +75,8 @@ public partial class JanelaPrincipal : Window
             Dispatcher.BeginInvoke(() =>
             {
                 TituloBarra.Text = "usando " + cap.Resumo;
-                if (!cap.EncoderPorPlaca) MarcarQualidadesPesadas();
+                _semPlaca = !cap.EncoderPorPlaca;
+                AtualizarRotulosQualidade();
 
                 var escolhido = SeletorMonitor.SelectedIndex;
                 _telas = telas;
@@ -94,26 +97,62 @@ public partial class JanelaPrincipal : Window
         SeletorMonitor.ItemsSource = _telas.Select(t => t.Rotulo).ToList();
         SeletorMonitor.SelectedIndex = Math.Min(_ajustes.MonitorIndice, _telas.Count - 1);
 
-        SeletorQualidade.ItemsSource = Padroes.Qualidades.Select(q => q.Rotulo).ToList();
+        AtualizarRotulosQualidade();
         var atual = Array.FindIndex(Padroes.Qualidades,
             q => q.Largura == _ajustes.Largura && q.Fps == _ajustes.Fps);
-        SeletorQualidade.SelectedIndex = atual >= 0 ? atual : 2;
+        SeletorQualidade.SelectedIndex = atual >= 0 ? atual : 3;
     }
 
     /// <summary>
-    /// Sem placa que ajude na codificação, as opções grandes pesam no processador.
-    /// Em vez de escondê-las, avisa e já sugere a que costuma dar conta.
+    /// Escreve ao lado de cada qualidade o que ela custa de internet e o que não cabe
+    /// na conexão medida. Sem isso a pessoa escolhe 4K num link de 3 Mb/s e a imagem
+    /// trava do outro lado sem nenhuma pista do motivo.
     /// </summary>
-    private void MarcarQualidadesPesadas()
+    private void AtualizarRotulosQualidade()
     {
-        var itens = Padroes.Qualidades.Select(q =>
-            q.Largura >= 2560 || (q.Largura >= 1920 && q.Fps >= 60)
-                ? q.Rotulo + "  (sem placa: pode travar)"
-                : q.Rotulo).ToList();
+        var semPlaca = _semPlaca;
+        var velocidade = Medidor.Ultima;
+
+        var itens = new List<string>();
+        for (int i = 0; i < Padroes.Qualidades.Length; i++)
+        {
+            var q = Padroes.Qualidades[i];
+            var texto = $"{q.Rotulo} · {q.Bitrate} Mb/s";
+
+            // Sufixos curtos: o seletor tem largura fixa e texto comprido sai cortado.
+            if (velocidade is not null && !Medidor.Cabe(i, velocidade.SubidaMbps))
+                texto += " · não cabe";
+            else if (semPlaca && (q.Largura >= 2560 || (q.Largura >= 1920 && q.Fps >= 60)))
+                texto += " · pesado";
+
+            itens.Add(texto);
+        }
 
         var escolhido = SeletorQualidade.SelectedIndex;
         SeletorQualidade.ItemsSource = itens;
-        SeletorQualidade.SelectedIndex = Math.Min(escolhido, 2);
+        SeletorQualidade.SelectedIndex = Math.Clamp(escolhido, 0, itens.Count - 1);
+    }
+
+    /// <summary>Mede a internet e deixa a qualidade escolhida no que ela aguenta.</summary>
+    private async Task MedirInternetAsync()
+    {
+        var velocidade = await Medidor.MedirAsync(_ajustes.Servidor);
+        if (velocidade is null || velocidade.Vazia) return;
+
+        AtualizarRotulosQualidade();
+
+        var melhor = Medidor.MelhorQualidade(velocidade.SubidaMbps);
+        if (SeletorQualidade.SelectedIndex > melhor)
+        {
+            SeletorQualidade.SelectedIndex = melhor;
+            MostrarAviso($"Sua internet sobe {velocidade.SubidaMbps:0.#} Mb/s. " +
+                         $"Deixei em {Padroes.Qualidades[melhor].Rotulo} para a imagem não travar.");
+        }
+        else
+        {
+            MostrarAviso($"Sua internet sobe {velocidade.SubidaMbps:0.#} Mb/s " +
+                         $"e baixa {velocidade.DescidaMbps:0.#} Mb/s.");
+        }
     }
 
     private async Task VerificarServidorAsync()
@@ -122,6 +161,19 @@ public partial class JanelaPrincipal : Window
         LuzServidor.Fill = (Brush)FindResource("Apagado");
 
         var ok = await Sinal.ServidorRespondeAsync(_ajustes.Servidor);
+
+        // Endereço guardado que parou de responder não pode deixar o app inútil: se o
+        // servidor oficial atende, é ele que vale, e a preferência é corrigida em disco.
+        if (!ok && _ajustes.Servidor != Padroes.ServidorPadrao &&
+            await Sinal.ServidorRespondeAsync(Padroes.ServidorPadrao))
+        {
+            Registro.Escrever($"servidor guardado ({_ajustes.Servidor}) não respondeu; " +
+                              $"voltando para {Padroes.ServidorPadrao}");
+            _ajustes.Servidor = Padroes.ServidorPadrao;
+            _ajustes.Salvar();
+            ok = true;
+        }
+
         if (ok)
         {
             LuzServidor.Fill = (Brush)FindResource("Ok");
@@ -134,6 +186,7 @@ public partial class JanelaPrincipal : Window
         }
         BotaoCriar.IsEnabled = ok;
         BotaoEntrar.IsEnabled = ok;
+        _servidorConferido = true;
     }
 
     // ================================================================== entrada
@@ -170,10 +223,16 @@ public partial class JanelaPrincipal : Window
 
     private async void EntrarPorConvite(string codigo)
     {
+        Registro.Escrever($"entrando pelo convite: {codigo}");
         CampoCodigo.Text = codigo;
         if (PainelSala.Visibility == Visibility.Visible) SairDaSala();
+
         var apelido = Apelido();
         if (apelido is null) return;
+
+        // O convite chega antes da checagem terminar quando o app é aberto pelo link.
+        if (!_servidorConferido) await VerificarServidorAsync();
+
         if (!await ConectarAsync()) return;
         _sinal!.EntrarNaSala(codigo, apelido);
     }
@@ -216,6 +275,8 @@ public partial class JanelaPrincipal : Window
 
     private void MostrarSala(EstadoSala sala)
     {
+        Registro.Escrever($"entrei na sala {sala.Codigo} como id {sala.Voce} " +
+                          $"({sala.Participantes.Count} pessoa(s))");
         PainelEntrada.Visibility = Visibility.Collapsed;
         PainelSala.Visibility = Visibility.Visible;
 
@@ -234,6 +295,10 @@ public partial class JanelaPrincipal : Window
         _transmissor.AoAvisar += m => Dispatcher.BeginInvoke(() => MostrarAviso(m));
 
         AtualizarSala(sala);
+
+        // Só quem entrou numa sala vai transmitir; medir antes disso seria gasto à toa.
+        if (Medidor.Ultima is null) _ = MedirInternetAsync();
+        else AtualizarRotulosQualidade();
     }
 
     private void AtualizarSala(EstadoSala sala)
@@ -560,6 +625,7 @@ public partial class JanelaPrincipal : Window
 
     private void MostrarAviso(string texto)
     {
+        Registro.Escrever("aviso na tela: " + texto);
         TextoAviso.Text = texto;
         Aviso.Visibility = Visibility.Visible;
 

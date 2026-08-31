@@ -103,8 +103,13 @@ public sealed class Ajustes
     {
         if (string.IsNullOrWhiteSpace(Apelido)) Apelido = Environment.UserName;
         if (Apelido.Length > 20) Apelido = Apelido[..20];
-        if (string.IsNullOrWhiteSpace(Servidor)) Servidor = Padroes.ServidorPadrao;
-        if (Largura is not (1280 or 1600 or 1920 or 2560 or 3840)) Largura = 1920;
+        // Endereço de servidor que já saiu de uso vira o atual: sem isso, quem instalou uma
+        // versão antiga fica preso num endereço morto e o app diz "servidor fora do ar".
+        if (string.IsNullOrWhiteSpace(Servidor) ||
+            Padroes.ServidoresAposentados.Any(
+                v => Servidor.TrimEnd('/').Equals(v, StringComparison.OrdinalIgnoreCase)))
+            Servidor = Padroes.ServidorPadrao;
+        if (Largura is not (960 or 1280 or 1920 or 2560 or 3840)) Largura = 1920;
         if (Fps is not (30 or 60)) Fps = 60;
         Bitrate = Math.Clamp(Bitrate, 1, 60);
         VolumeSaida = Math.Clamp(VolumeSaida, 0, 100);
@@ -120,13 +125,24 @@ public static class Padroes
 
     public const string EsquemaLink = "qubitscast";
 
+    /// <summary>Endereços que já foram o padrão. Ajuste antigo apontando para um deles é migrado.</summary>
+    public static readonly string[] ServidoresAposentados =
+    {
+        "https://cast.encrypthost.com.br",
+    };
+
+    /// <summary>
+    /// Da mais leve para a mais pesada — a ordem importa: o app escolhe a última que
+    /// couber na internet de quem transmite.
+    /// </summary>
     public static readonly (string Rotulo, int Largura, int Fps, int Bitrate)[] Qualidades =
     {
-        ("720p · 30 fps · leve",        1280, 30,  3),
-        ("1080p · 30 fps",              1920, 30,  6),
-        ("1080p · 60 fps · recomendado",1920, 60,  8),
-        ("1440p · 60 fps",              2560, 60, 14),
-        ("4K · 60 fps · pesado",        3840, 60, 25),
+        ("540p · 30 fps",   960, 30,  1),
+        ("720p · 30 fps",  1280, 30,  2),
+        ("1080p · 30 fps", 1920, 30,  5),
+        ("1080p · 60 fps", 1920, 60,  8),
+        ("1440p · 60 fps", 2560, 60, 14),
+        ("4K · 60 fps",    3840, 60, 25),
     };
 }
 

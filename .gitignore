@@ -19,3 +19,6 @@ node_modules/
 # arquivos de trabalho
 *.log
 *.bgra
+
+# instalador publicado no servidor (nao versionado, tem 85 MB)
+servidor/publico/QubitsCast-instalador.exe
