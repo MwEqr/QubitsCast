@@ -116,6 +116,14 @@ assiste não tem esse problema, porque a descida é 6 vezes maior.
 **`scp` não serve para medir banda** — o SSH tem janela de fluxo própria e limita sozinho
 (deu 2,3 Mb/s onde o HTTP deu 3,1). Medir pelo endpoint `/medir` do próprio servidor.
 
+**Fluidez e nitidez são independentes, e amarrar as duas foi erro meu.** A primeira tabela de
+qualidades só oferecia 60 fps a partir de 1080p; com 3 Mb/s de subida o app caía sozinho em
+30 fps, e movimento picotado incomoda muito mais que imagem menos nítida. Medido contra a
+produção: **720p a 60 fps com 2 Mb/s dá 59 quadros enviados e 53-55 recebidos** — com
+anfitrião e espectador na mesma máquina, disputando CPU e a mesma conexão nos dois sentidos.
+Os valores de banda são para **tela de computador**, que tem muita área parada entre quadros
+e comprime muito melhor que filme; tabela calibrada para filme superestima em ~2,5x.
+
 ---
 
 ## 3.2 Publicar versão nova
