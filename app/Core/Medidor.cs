@@ -64,13 +64,19 @@ public static class Medidor
     }
 
     /// <summary>
-    /// Maior qualidade que cabe na subida medida, deixando folga.
-    /// A folga não é capricho: link cheio até a borda faz a fila crescer e a imagem
-    /// atrasar cada vez mais, em vez de simplesmente ficar menos nítida.
+    /// Folga sobre a subida medida. Não é capricho: link cheio até a borda faz a fila
+    /// crescer e a imagem atrasar cada vez mais, em vez de só ficar menos nítida.
+    /// </summary>
+    private const double Folga = 0.85;
+
+    /// <summary>
+    /// Maior qualidade que cabe na subida medida, entre as de 60 quadros por segundo.
+    /// Escolher automaticamente uma opção de 30 nunca acontece: perder movimento incomoda
+    /// mais do que perder nitidez, e quem quiser trocar troca na mão.
     /// </summary>
     public static int MelhorQualidade(double subidaMbps)
     {
-        var teto = subidaMbps * 0.75;
+        var teto = subidaMbps * Folga;
         int melhor = 0;
         for (int i = 0; i < Padroes.Qualidades.Length; i++)
             if (Padroes.Qualidades[i].Bitrate <= teto) melhor = i;
@@ -78,5 +84,5 @@ public static class Medidor
     }
 
     public static bool Cabe(int indiceQualidade, double subidaMbps)
-        => Padroes.Qualidades[indiceQualidade].Bitrate <= subidaMbps * 0.75;
+        => Padroes.TodasQualidades[indiceQualidade].Bitrate <= subidaMbps * Folga;
 }

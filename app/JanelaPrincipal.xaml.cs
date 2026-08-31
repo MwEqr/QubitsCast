@@ -176,7 +176,7 @@ public partial class JanelaPrincipal : Window
         MontarSeletorDeSom();
 
         AtualizarRotulosQualidade();
-        var atual = Array.FindIndex(Padroes.Qualidades,
+        var atual = Array.FindIndex(Padroes.TodasQualidades,
             q => q.Largura == _ajustes.Largura && q.Fps == _ajustes.Fps);
         SeletorQualidade.SelectedIndex = atual >= 0 ? atual : 3;
     }
@@ -192,16 +192,18 @@ public partial class JanelaPrincipal : Window
         var velocidade = Medidor.Ultima;
 
         var itens = new List<string>();
-        for (int i = 0; i < Padroes.Qualidades.Length; i++)
+        for (int i = 0; i < Padroes.TodasQualidades.Length; i++)
         {
-            var q = Padroes.Qualidades[i];
-            var texto = $"{q.Rotulo} · {q.Bitrate} Mb/s";
-
-            // Sufixos curtos: o seletor tem largura fixa e texto comprido sai cortado.
+            var q = Padroes.TodasQualidades[i];
+            // O aviso substitui o consumo em vez de somar a ele: os dois juntos não cabem
+            // na largura do seletor e o texto sai cortado no meio de uma palavra.
+            string texto;
             if (velocidade is not null && !Medidor.Cabe(i, velocidade.SubidaMbps))
-                texto += " · não cabe";
+                texto = $"{q.Rotulo} · não cabe";
             else if (semPlaca && (q.Largura >= 2560 || (q.Largura >= 1920 && q.Fps >= 60)))
-                texto += " · pesado";
+                texto = $"{q.Rotulo} · pesado";
+            else
+                texto = $"{q.Rotulo} · {q.Bitrate} Mb/s";
 
             itens.Add(texto);
         }
@@ -284,7 +286,7 @@ public partial class JanelaPrincipal : Window
         {
             SeletorQualidade.SelectedIndex = melhor;
             MostrarAviso($"Sua internet sobe {velocidade.SubidaMbps:0.#} Mb/s. " +
-                         $"Deixei em {Padroes.Qualidades[melhor].Rotulo} para a imagem não travar.");
+                         $"Deixei em {Padroes.TodasQualidades[melhor].Rotulo} para a imagem não travar.");
         }
         else
         {
@@ -521,7 +523,7 @@ public partial class JanelaPrincipal : Window
         var fonte = FonteEscolhida();
         if (fonte is null) { MostrarAviso("Escolha o que você quer transmitir."); return; }
 
-        var q = Padroes.Qualidades[Math.Max(0, SeletorQualidade.SelectedIndex)];
+        var q = Padroes.TodasQualidades[Math.Max(0, SeletorQualidade.SelectedIndex)];
 
         _ajustes.FonteChave = fonte.Chave;
         _ajustes.MonitorIndice = fonte.EhJanela ? _ajustes.MonitorIndice : fonte.IndiceDxgi;

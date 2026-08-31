@@ -172,8 +172,11 @@ public sealed class Sinal : IDisposable
         if (fila is null) return false;
 
         var pendentes = Volatile.Read(ref _pendentes);
-        if (pendentes > 90) return false;                       // fila entupida: descarta tudo
-        if (pendentes > 24 && tipo == Pacote.VideoInter) return false;
+        if (pendentes > 150) return false;                      // fila entupida: descarta tudo
+        // Cerca de meio segundo de vídeo a 60 quadros. Cortar antes disso derruba a
+        // fluidez à toa numa oscilação curta da rede; muito depois, a imagem começa a
+        // chegar atrasada e o atraso nunca mais volta.
+        if (pendentes > 32 && tipo == Pacote.VideoInter) return false;
 
         var buf = new byte[corpo.Length + 3];
         buf[0] = 1;      // marcador de binário para a fila

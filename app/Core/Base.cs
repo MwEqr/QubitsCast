@@ -119,7 +119,7 @@ public sealed class Ajustes
             Padroes.ServidoresAposentados.Any(
                 v => Servidor.TrimEnd('/').Equals(v, StringComparison.OrdinalIgnoreCase)))
             Servidor = Padroes.ServidorPadrao;
-        if (Largura is not (960 or 1280 or 1920 or 2560 or 3840)) Largura = 1920;
+        if (Largura is not (960 or 1280 or 1600 or 1920 or 2560 or 3840)) Largura = 1280;
         if (Fps is not (30 or 60)) Fps = 60;
         Bitrate = Math.Clamp(Bitrate, 1, 60);
         VolumeSaida = Math.Clamp(VolumeSaida, 0, 100);
@@ -145,16 +145,42 @@ public static class Padroes
     /// <summary>
     /// Da mais leve para a mais pesada — a ordem importa: o app escolhe a última que
     /// couber na internet de quem transmite.
+    ///
+    /// <para>
+    /// 60 quadros por segundo aparece já na opção mais leve, de propósito. Fluidez e nitidez
+    /// são coisas separadas: dá para ter movimento liso em 540p gastando 1,2 Mb/s. Amarrar
+    /// os 60 quadros só às resoluções grandes obrigava quem tem pouca subida a ficar em 30,
+    /// que é justamente o que se sente numa tela em movimento.
+    /// </para>
+    /// <para>
+    /// Os valores de banda são calibrados para tela de computador, não para filme: tela tem
+    /// muita área parada entre um quadro e outro, e comprime muito melhor.
+    /// </para>
     /// </summary>
     public static readonly (string Rotulo, int Largura, int Fps, int Bitrate)[] Qualidades =
     {
-        ("540p · 30 fps",   960, 30,  1),
-        ("720p · 30 fps",  1280, 30,  2),
-        ("1080p · 30 fps", 1920, 30,  5),
-        ("1080p · 60 fps", 1920, 60,  8),
-        ("1440p · 60 fps", 2560, 60, 14),
-        ("4K · 60 fps",    3840, 60, 25),
+        ("540p · 60 fps",   960, 60,  1),
+        ("720p · 60 fps",  1280, 60,  2),
+        ("900p · 60 fps",  1600, 60,  3),
+        ("1080p · 60 fps", 1920, 60,  5),
+        ("1440p · 60 fps", 2560, 60,  9),
+        ("4K · 60 fps",    3840, 60, 18),
     };
+
+    /// <summary>
+    /// Mesmas resoluções a 30 quadros, para quem prefere imagem maior a movimento liso.
+    /// Ficam depois na lista, e nunca são escolhidas sozinhas pelo app.
+    /// </summary>
+    public static readonly (string Rotulo, int Largura, int Fps, int Bitrate)[] QualidadesEconomicas =
+    {
+        ("720p · 30 fps",  1280, 30,  1),
+        ("1080p · 30 fps", 1920, 30,  3),
+        ("1440p · 30 fps", 2560, 30,  6),
+    };
+
+    /// <summary>O que aparece no seletor: as fluidas primeiro, as econômicas depois.</summary>
+    public static readonly (string Rotulo, int Largura, int Fps, int Bitrate)[] TodasQualidades =
+        [.. Qualidades, .. QualidadesEconomicas];
 }
 
 /// <summary>
