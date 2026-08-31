@@ -466,6 +466,21 @@ const servidor = http.createServer((req, res) => {
     }));
   }
 
+  // Versão publicada. O app consulta isto ao abrir para se atualizar sozinho.
+  // O arquivo é escrito pelo publicar.ps1 e não é versionado — cada publicação o reescreve.
+  if (caminho === '/versao') {
+    try {
+      const bruto = fs.readFileSync(path.join(AQUI, 'publico', 'versao.json'), 'utf8');
+      const dados = JSON.parse(bruto);
+      // O endereço do instalador é montado aqui, e não gravado no arquivo: assim trocar o
+      // domínio do servidor não deixa o app baixando de um lugar que não existe mais.
+      dados.url = `${SITE}/baixar`;
+      return responder(res, 200, 'application/json', JSON.stringify(dados));
+    } catch {
+      return responder(res, 200, 'application/json', JSON.stringify({ versao: '' }));
+    }
+  }
+
   // Medidor de velocidade. O app usa para saber que qualidade a internet de quem
   // transmite aguenta, em vez de deixar a pessoa escolher 4K num link que não sobe 2 Mb/s.
   if (caminho === '/medir') {

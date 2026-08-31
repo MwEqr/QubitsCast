@@ -27,7 +27,8 @@ public static class Autoteste
                     args.Length > 4 ? int.Parse(args[4]) : 1280,
                     args.Length > 5 ? int.Parse(args[5]) : 30,
                     args.Length > 6 ? int.Parse(args[6]) : 4,
-                    args.Length > 7 ? int.Parse(args[7]) : 26),
+                    args.Length > 7 ? int.Parse(args[7]) : 26,
+                    args.Length > 8 ? args[8] : null),
                 "espectador" => await EspectadorAsync(args[2], args[3], args[4]),
                 _ => Erro("papel desconhecido: " + papel),
             };
@@ -54,7 +55,8 @@ public static class Autoteste
     // ------------------------------------------------------------------ anfitrião
 
     private static async Task<int> AnfitriaoAsync(string servidor, string relatorio,
-                                                   int largura, int fps, int mbps, int segundos)
+                                                   int largura, int fps, int mbps, int segundos,
+                                                   string? tituloJanela)
     {
         File.WriteAllText(relatorio, "", Encoding.UTF8);
         Anotar(relatorio, "papel=anfitriao");
@@ -78,8 +80,25 @@ public static class Autoteste
 
         var telas = Telas.CasarComSaidasDaPlaca(Telas.Listar());
         var tela = telas.FirstOrDefault(t => t.Principal) ?? telas[0];
-        Anotar(relatorio, $"tela={tela.Largura}x{tela.Altura} (saída {tela.IndiceDxgi} da placa, " +
-                          $"{telas.Count} monitor(es))");
+
+        Fonte fonte;
+        if (!string.IsNullOrWhiteSpace(tituloJanela))
+        {
+            var janelas = Janelas.Listar();
+            Anotar(relatorio, $"janelas-abertas={janelas.Count}");
+            var achada = janelas.FirstOrDefault(j =>
+                j.Rotulo.Contains(tituloJanela, StringComparison.OrdinalIgnoreCase));
+            if (achada is null)
+                return Erro($"nenhuma janela com \"{tituloJanela}\" no título");
+            fonte = achada;
+            Anotar(relatorio, $"fonte=janela \"{fonte.Rotulo}\" {fonte.Largura}x{fonte.Altura}");
+        }
+        else
+        {
+            fonte = Fonte.DeTela(tela);
+            Anotar(relatorio, $"fonte=tela {tela.Largura}x{tela.Altura} " +
+                              $"(saída {tela.IndiceDxgi} da placa, {telas.Count} monitor(es))");
+        }
 
         using var transmissor = new Transmissor(sinal);
         int amostras = 0, somaFps = 0;
@@ -93,7 +112,8 @@ public static class Autoteste
         };
         transmissor.AoFalhar += m => Anotar(relatorio, "falha-captura=" + m);
 
-        if (!transmissor.Iniciar(tela, largura, fps, mbps)) return Erro("a captura não iniciou");
+        if (!transmissor.Iniciar(fonte, largura, fps, mbps))
+            return Erro("a captura não iniciou");
         Anotar(relatorio, $"transmitindo={transmissor.Largura}x{transmissor.Altura}@{transmissor.Fps}");
 
         // Fica no ar tempo suficiente para o espectador entrar, sincronizar e medir.

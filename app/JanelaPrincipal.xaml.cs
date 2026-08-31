@@ -29,6 +29,11 @@ public partial class JanelaPrincipal : Window
     private readonly Ajustes _ajustes = Ajustes.Carregar();
     private readonly ObservableCollection<ItemParticipante> _participantes = [];
     private List<Tela> _telas = [];
+    private List<Fonte> _fontes = [];
+    private List<AppComSom> _appsComSom = [];
+
+    /// <summary>Opções do seletor de som: rótulo, de onde vem, qual programa, e se tem som.</summary>
+    private readonly List<(string Rotulo, FonteSom Fonte, int Pid, bool ComSom)> _opcoesSom = [];
 
     private Sinal? _sinal;
     private Transmissor? _transmissor;
@@ -44,6 +49,7 @@ public partial class JanelaPrincipal : Window
     private DispatcherTimer? _tempoAviso;
     private bool _semPlaca;
     private bool _servidorConferido;
+    private VersaoPublicada? _versaoNova;
 
     public JanelaPrincipal()
     {
@@ -78,10 +84,8 @@ public partial class JanelaPrincipal : Window
                 _semPlaca = !cap.EncoderPorPlaca;
                 AtualizarRotulosQualidade();
 
-                var escolhido = SeletorMonitor.SelectedIndex;
                 _telas = telas;
-                SeletorMonitor.ItemsSource = telas.Select(t => t.Rotulo).ToList();
-                SeletorMonitor.SelectedIndex = Math.Clamp(escolhido, 0, telas.Count - 1);
+                MontarFontes();
             });
         });
 
@@ -89,13 +93,87 @@ public partial class JanelaPrincipal : Window
 
         if (!string.IsNullOrEmpty(App.ConviteInicial))
             EntrarPorConvite(App.ConviteInicial!);
+
+        _ = ProcurarAtualizacaoAsync();
+    }
+
+    // ================================================================== atualização
+
+    /// <summary>
+    /// Procura versão nova ao abrir e depois de tempos em tempos. Nunca instala sozinho:
+    /// quem decide a hora é quem está usando — pode estar no meio de uma transmissão.
+    /// </summary>
+    private async Task ProcurarAtualizacaoAsync()
+    {
+        Atualizacao.LimparAntigos();
+
+        while (true)
+        {
+            try
+            {
+                var achada = await Atualizacao.ProcurarAsync(_ajustes.Servidor);
+                if (achada is not null)
+                {
+                    _versaoNova = achada;
+                    BotaoAtualizar.Content = "Atualizar para " + achada.Versao;
+                    BotaoAtualizar.Visibility = Visibility.Visible;
+                    MostrarAviso($"Saiu a versão {achada.Versao}" +
+                                 (string.IsNullOrWhiteSpace(achada.Notas) ? "" : ": " + achada.Notas));
+                }
+            }
+            catch (Exception e) { Registro.Falha("ProcurarAtualizacao", e); }
+
+            await Task.Delay(TimeSpan.FromHours(6));
+        }
+    }
+
+    private async void Atualizar_Clique(object remetente, RoutedEventArgs e)
+    {
+        var versao = _versaoNova;
+        if (versao is null) return;
+
+        if (_transmissor?.Ativo == true)
+        {
+            MostrarAviso("Pare a transmissão antes de atualizar.");
+            return;
+        }
+
+        BotaoAtualizar.IsEnabled = false;
+        BotaoAtualizar.Content = "Baixando…";
+
+        var andamento = new Progress<double>(p =>
+            BotaoAtualizar.Content = $"Baixando… {p:0}%");
+
+        var arquivo = await Atualizacao.BaixarAsync(versao, andamento);
+        if (arquivo is null)
+        {
+            BotaoAtualizar.IsEnabled = true;
+            BotaoAtualizar.Content = "Atualizar para " + versao.Versao;
+            MostrarAviso("Não consegui baixar a atualização. Tente de novo daqui a pouco.");
+            return;
+        }
+
+        BotaoAtualizar.Content = "Instalando…";
+        DesmontarSala();
+
+        if (!Atualizacao.Instalar(arquivo))
+        {
+            BotaoAtualizar.IsEnabled = true;
+            BotaoAtualizar.Content = "Atualizar para " + versao.Versao;
+            MostrarAviso("Não consegui abrir o instalador da atualização.");
+            return;
+        }
+
+        // O instalador troca arquivos que estão em uso; o app precisa sair da frente.
+        await Task.Delay(600);
+        Application.Current.Shutdown();
     }
 
     private void MontarSeletores()
     {
         _telas = Telas.Listar();
-        SeletorMonitor.ItemsSource = _telas.Select(t => t.Rotulo).ToList();
-        SeletorMonitor.SelectedIndex = Math.Min(_ajustes.MonitorIndice, _telas.Count - 1);
+        MontarFontes();
+        MontarSeletorDeSom();
 
         AtualizarRotulosQualidade();
         var atual = Array.FindIndex(Padroes.Qualidades,
@@ -131,6 +209,66 @@ public partial class JanelaPrincipal : Window
         var escolhido = SeletorQualidade.SelectedIndex;
         SeletorQualidade.ItemsSource = itens;
         SeletorQualidade.SelectedIndex = Math.Clamp(escolhido, 0, itens.Count - 1);
+    }
+
+    /// <summary>Monta a lista do que dá para transmitir: os monitores e as janelas abertas.</summary>
+    private void MontarFontes()
+    {
+        var escolhidaAntes = FonteEscolhida()?.Chave ?? _ajustes.FonteChave;
+
+        _fontes = Fontes.Listar(_telas);
+        SeletorFonte.ItemsSource = _fontes.Select(f => f.Rotulo).ToList();
+
+        // Tenta manter o que estava escolhido; janela fechada volta para o monitor principal.
+        var indice = _fontes.FindIndex(f => f.Chave == escolhidaAntes);
+        if (indice < 0) indice = _fontes.FindIndex(f => !f.EhJanela);
+        SeletorFonte.SelectedIndex = Math.Max(0, indice);
+    }
+
+    private Fonte? FonteEscolhida()
+        => _fontes.ElementAtOrDefault(SeletorFonte.SelectedIndex);
+
+    /// <summary>
+    /// Monta as opções de som. "Só o som de um programa" só entra quando o Windows tem a
+    /// função — em vez de deixar a pessoa escolher e falhar na hora de transmitir.
+    /// </summary>
+    private void MontarSeletorDeSom()
+    {
+        _opcoesSom.Clear();
+        _opcoesSom.Add(("Sem som", FonteSom.Computador, 0, false));
+        _opcoesSom.Add(("Som do computador", FonteSom.Computador, 0, true));
+
+        if (AudioPorApp.Suportado)
+        {
+            _appsComSom = AudioPorApp.Listar();
+            foreach (var a in _appsComSom)
+                _opcoesSom.Add(($"Só o som de {a.Nome}", FonteSom.Aplicativo, a.Pid, true));
+            SeletorAudio.ToolTip = "Que som vai junto com a imagem";
+        }
+        else
+        {
+            SeletorAudio.ToolTip = AudioPorApp.MotivoIndisponivel;
+        }
+
+        SeletorAudio.ItemsSource = _opcoesSom.Select(o => o.Rotulo).ToList();
+
+        var indice = _ajustes.ModoSom switch
+        {
+            0 => 0,
+            2 => Math.Max(1, _opcoesSom.FindIndex(o =>
+                     o.Fonte == FonteSom.Aplicativo &&
+                     o.Rotulo.EndsWith(_ajustes.ProgramaDoSom, StringComparison.OrdinalIgnoreCase))),
+            _ => 1,
+        };
+        SeletorAudio.SelectedIndex = Math.Clamp(indice, 0, _opcoesSom.Count - 1);
+    }
+
+    private void AtualizarFontes_Clique(object remetente, RoutedEventArgs e)
+    {
+        _telas = Telas.CasarComSaidasDaPlaca(Telas.Listar());
+        MontarFontes();
+        MontarSeletorDeSom();
+        MostrarAviso("Lista de telas e janelas atualizada.");
     }
 
     /// <summary>Mede a internet e deixa a qualidade escolhida no que ela aguenta.</summary>
@@ -346,7 +484,7 @@ public partial class JanelaPrincipal : Window
         // Outra pessoa está transmitindo: os controles de captura ficam fora de alcance.
         bool alguemMais = t is not null && !souEu;
         BotaoTransmitir.IsEnabled = !alguemMais;
-        SeletorMonitor.IsEnabled = SeletorQualidade.IsEnabled = _transmissor?.Ativo != true;
+        SeletorFonte.IsEnabled = SeletorAudio.IsEnabled = SeletorQualidade.IsEnabled =_transmissor?.Ativo != true;
 
         if (t is null || souEu)
         {
@@ -380,31 +518,74 @@ public partial class JanelaPrincipal : Window
 
         if (_transmissor.Ativo) { PararTransmissao(); return; }
 
-        var tela = _telas.ElementAtOrDefault(Math.Max(0, SeletorMonitor.SelectedIndex)) ?? _telas[0];
+        var fonte = FonteEscolhida();
+        if (fonte is null) { MostrarAviso("Escolha o que você quer transmitir."); return; }
+
         var q = Padroes.Qualidades[Math.Max(0, SeletorQualidade.SelectedIndex)];
 
-        _ajustes.MonitorIndice = tela.Indice;
+        _ajustes.FonteChave = fonte.Chave;
+        _ajustes.MonitorIndice = fonte.EhJanela ? _ajustes.MonitorIndice : fonte.IndiceDxgi;
         _ajustes.Largura = q.Largura;
         _ajustes.Fps = q.Fps;
         _ajustes.Bitrate = q.Bitrate;
         _ajustes.Salvar();
 
-        if (!_transmissor.Iniciar(tela, q.Largura, q.Fps, q.Bitrate)) return;
+        if (!_transmissor.Iniciar(fonte, q.Largura, q.Fps, q.Bitrate)) return;
 
-        // O som do que está na tela vai junto: é o que faz "assistir junto" funcionar.
-        _somDoSistema = new CapturaAudio(doSistema: true,
-            pacote => _sinal?.EnviarMidia(Pacote.AudioTela, pacote));
-        if (!_somDoSistema.Iniciar())
-            MostrarAviso("A tela está indo, mas não consegui capturar o som do computador.");
+        IniciarSomDaTransmissao();
 
         BotaoTransmitir.Content = "Parar de transmitir";
         BotaoTransmitir.Style = (Style)FindResource("BotaoPerigo");
-        SeletorMonitor.IsEnabled = SeletorQualidade.IsEnabled = false;
+        SeletorFonte.IsEnabled = SeletorAudio.IsEnabled = SeletorQualidade.IsEnabled =false;
         Selo.Visibility = Visibility.Visible;
         AtualizarSelo("iniciando…");
         AvisoVazio.Visibility = Visibility.Visible;
         TextoVazio.Text = "Você está transmitindo";
         TextoVazio2.Text = "Quem está na sala já está vendo sua tela.";
+    }
+
+    /// <summary>
+    /// Liga o som escolhido junto com a imagem. Quando a pessoa pediu o som de um programa
+    /// e o Windows não deixa, cai para o som do computador e explica — melhor do que
+    /// transmitir mudo sem avisar.
+    /// </summary>
+    private void IniciarSomDaTransmissao()
+    {
+        var opcao = _opcoesSom.ElementAtOrDefault(SeletorAudio.SelectedIndex);
+        if (opcao == default || !opcao.ComSom)
+        {
+            _ajustes.ModoSom = 0;
+            _ajustes.Salvar();
+            return;
+        }
+
+        _ajustes.ModoSom = opcao.Fonte == FonteSom.Aplicativo ? 2 : 1;
+        _ajustes.ProgramaDoSom = opcao.Fonte == FonteSom.Aplicativo
+            ? _appsComSom.FirstOrDefault(a => a.Pid == opcao.Pid)?.Nome ?? ""
+            : "";
+        _ajustes.Salvar();
+
+        _somDoSistema = new CapturaAudio(opcao.Fonte,
+            pacote => _sinal?.EnviarMidia(Pacote.AudioTela, pacote), opcao.Pid);
+
+        if (_somDoSistema.Iniciar()) return;
+
+        var recado = _somDoSistema.Recado;
+        _somDoSistema.Dispose();
+
+        if (opcao.Fonte == FonteSom.Aplicativo)
+        {
+            _somDoSistema = new CapturaAudio(FonteSom.Computador,
+                pacote => _sinal?.EnviarMidia(Pacote.AudioTela, pacote));
+            if (_somDoSistema.Iniciar())
+            {
+                MostrarAviso(recado ?? "Segui com o som do computador inteiro.");
+                return;
+            }
+        }
+
+        _somDoSistema = null;
+        MostrarAviso(recado ?? "A tela está indo, mas não consegui capturar o som.");
     }
 
     private void PararTransmissao()
@@ -415,7 +596,7 @@ public partial class JanelaPrincipal : Window
 
         BotaoTransmitir.Content = "Transmitir minha tela";
         BotaoTransmitir.Style = (Style)FindResource("BotaoPrimario");
-        SeletorMonitor.IsEnabled = SeletorQualidade.IsEnabled = true;
+        SeletorFonte.IsEnabled = SeletorAudio.IsEnabled = SeletorQualidade.IsEnabled =true;
         Selo.Visibility = Visibility.Collapsed;
         TextoVazio.Text = "Ninguém está transmitindo ainda";
         TextoVazio2.Text = "Clique em “Transmitir minha tela” para começar.";
@@ -549,7 +730,7 @@ public partial class JanelaPrincipal : Window
             return;
         }
 
-        _microfone = new CapturaAudio(doSistema: false,
+        _microfone = new CapturaAudio(FonteSom.Microfone,
             pacote => _sinal?.EnviarMidia(Pacote.AudioVoz, pacote));
 
         if (!_microfone.Iniciar())

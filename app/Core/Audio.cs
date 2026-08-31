@@ -19,9 +19,24 @@ public static class FormatoAudio
     public const int AmostrasPorBloco = 960;   // 20 ms
 }
 
+/// <summary>De onde o som vem.</summary>
+public enum FonteSom
+{
+    /// <summary>Tudo que sai pelos alto-falantes, de todos os programas.</summary>
+    Computador,
+
+    /// <summary>Só um programa. Exige Windows 11 — ver <see cref="AudioPorApp"/>.</summary>
+    Aplicativo,
+
+    /// <summary>Microfone de quem está falando.</summary>
+    Microfone,
+}
+
 /// <summary>Captura uma fonte e entrega blocos Opus prontos para enviar.</summary>
 public sealed class CapturaAudio : IDisposable
 {
+    private readonly FonteSom _fonte;
+    private readonly int _pidAlvo;
     private readonly bool _doSistema;
     private readonly int _canais;
     private readonly int _bitrate;
@@ -32,18 +47,23 @@ public sealed class CapturaAudio : IDisposable
     private ISampleProvider? _cadeia;
     private IOpusEncoder? _opus;
     private CancellationTokenSource? _parar;
+    private AudioPorApp.IClienteAudioAberto? _porPrograma;
 
     private readonly float[] _lidos;
     private readonly byte[] _saida = new byte[4000];
 
     public bool Ativa { get; private set; }
 
-    /// <param name="doSistema">true = som que está tocando no PC; false = microfone.</param>
-    public CapturaAudio(bool doSistema, Action<byte[]> aoCodificar)
+    /// <summary>Quando a captura por programa não pôde ser aberta, isto conta o porquê.</summary>
+    public string? Recado { get; private set; }
+
+    public CapturaAudio(FonteSom fonte, Action<byte[]> aoCodificar, int pidAlvo = 0)
     {
-        _doSistema = doSistema;
-        _canais = doSistema ? 2 : 1;
-        _bitrate = doSistema ? 96_000 : 28_000;
+        _fonte = fonte;
+        _pidAlvo = pidAlvo;
+        _doSistema = fonte != FonteSom.Microfone;
+        _canais = _doSistema ? 2 : 1;
+        _bitrate = _doSistema ? 96_000 : 28_000;
         _aoCodificar = aoCodificar;
         _lidos = new float[FormatoAudio.AmostrasPorBloco * _canais];
     }
@@ -51,6 +71,9 @@ public sealed class CapturaAudio : IDisposable
     public bool Iniciar()
     {
         Parar();
+
+        if (_fonte == FonteSom.Aplicativo && IniciarPorPrograma()) return true;
+
         try
         {
             _dispositivo = _doSistema ? new WasapiLoopbackCapture() : new WasapiCapture();
@@ -109,6 +132,87 @@ public sealed class CapturaAudio : IDisposable
         }
     }
 
+    /// <summary>
+    /// Caminho do "só o som deste programa". Devolve falso — sem estourar nada — quando o
+    /// Windows não tem essa função, e aí quem chama segue com o som do computador inteiro.
+    /// </summary>
+    private bool IniciarPorPrograma()
+    {
+        if (!AudioPorApp.Suportado)
+        {
+            Recado = AudioPorApp.MotivoIndisponivel;
+            return false;
+        }
+
+        try
+        {
+            var formato = WaveFormat.CreateIeeeFloatWaveFormat(FormatoAudio.Taxa, 2);
+            _porPrograma = AudioPorApp.Abrir(_pidAlvo, formato);
+            if (_porPrograma is null)
+            {
+                Recado = "Não consegui pegar o som desse programa. Continuo com o som do computador.";
+                return false;
+            }
+
+            _opus = OpusCodecFactory.CreateEncoder(FormatoAudio.Taxa, 2,
+                                                    OpusApplication.OPUS_APPLICATION_AUDIO);
+            _opus.Bitrate = _bitrate;
+            _opus.UseVBR = true;
+
+            _parar = new CancellationTokenSource();
+            _ = Task.Run(() => LacoPorProgramaAsync(_parar.Token));
+            Ativa = true;
+            return true;
+        }
+        catch (Exception e)
+        {
+            Registro.Falha("CapturaAudio.IniciarPorPrograma", e);
+            Recado = "Não consegui pegar o som desse programa. Continuo com o som do computador.";
+            return false;
+        }
+    }
+
+    private async Task LacoPorProgramaAsync(CancellationToken ct)
+    {
+        // O Windows entrega blocos de tamanho variável; aqui eles viram blocos de 20 ms,
+        // que é o que o codificador de voz espera.
+        var bruto = new byte[FormatoAudio.Taxa * 2 * sizeof(float)];   // 1 segundo de folga
+        var acumulado = new List<float>(FormatoAudio.AmostrasPorBloco * 8);
+        var porBloco = FormatoAudio.AmostrasPorBloco * 2;
+
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                var aberto = _porPrograma;
+                if (aberto is null) return;
+
+                int bytes = aberto.Ler(bruto);
+                if (bytes <= 0) { await Task.Delay(5, ct).ConfigureAwait(false); continue; }
+
+                int amostras = bytes / sizeof(float);
+                for (int i = 0; i < amostras; i++)
+                    acumulado.Add(BitConverter.ToSingle(bruto, i * sizeof(float)));
+
+                while (acumulado.Count >= porBloco)
+                {
+                    acumulado.CopyTo(0, _lidos, 0, porBloco);
+                    acumulado.RemoveRange(0, porBloco);
+
+                    int n = _opus!.Encode(_lidos, FormatoAudio.AmostrasPorBloco, _saida, _saida.Length);
+                    if (n > 0)
+                    {
+                        var pacote = new byte[n];
+                        Buffer.BlockCopy(_saida, 0, pacote, 0, n);
+                        _aoCodificar(pacote);
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception e) { Registro.Falha("CapturaAudio.LacoPorPrograma", e); }
+    }
+
     private async Task LacoAsync(CancellationToken ct)
     {
         try
@@ -148,6 +252,8 @@ public sealed class CapturaAudio : IDisposable
         _dispositivo = null;
         _cadeia = null;
         _buffer = null;
+        try { _porPrograma?.Dispose(); } catch { }
+        _porPrograma = null;
         try { _opus?.Dispose(); } catch { }
         _opus = null;
     }

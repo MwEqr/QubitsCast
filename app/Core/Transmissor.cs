@@ -28,7 +28,7 @@ public sealed class Transmissor : IDisposable
     private long _marcoSegundo;
 
     // Guardados para poder tentar de novo pelo processador se a placa recusar na hora.
-    private Tela? _tela;
+    private Fonte? _fonte;
     private int _larguraAlvo, _bitrateAlvo;
     private bool _noProcessador;
     private long _inicioCaptura;
@@ -48,17 +48,12 @@ public sealed class Transmissor : IDisposable
 
     public Transmissor(Sinal sinal) => _sinal = sinal;
 
-    public bool Iniciar(Tela tela, int larguraAlvo, int fps, int bitrateMbps)
-        => Iniciar(tela, larguraAlvo, fps, bitrateMbps, forcarProcessador: false);
+    public bool Iniciar(Fonte fonte, int larguraAlvo, int fps, int bitrateMbps)
+        => Iniciar(fonte, larguraAlvo, fps, bitrateMbps, forcarProcessador: false);
 
-    private bool Iniciar(Tela tela, int larguraAlvo, int fps, int bitrateMbps, bool forcarProcessador)
+    private bool Iniciar(Fonte fonte, int larguraAlvo, int fps, int bitrateMbps, bool forcarProcessador)
     {
         Parar();
-
-        _tela = tela;
-        _larguraAlvo = larguraAlvo;
-        _bitrateAlvo = bitrateMbps;
-        _noProcessador = forcarProcessador;
 
         if (!Ffmpeg.Existe)
         {
@@ -66,17 +61,36 @@ public sealed class Transmissor : IDisposable
             return false;
         }
 
-        // Não faz sentido esticar a imagem além do que o monitor tem: só gastaria banda.
-        var largura = Math.Min(larguraAlvo, tela.Largura);
-        var altura = (int)Math.Round((double)largura * tela.Altura / tela.Largura);
+        // A janela pode ter sido redimensionada ou fechada desde que a lista foi montada.
+        var atual = Janelas.Atualizar(fonte);
+        if (atual is null)
+        {
+            AoFalhar?.Invoke("Essa janela não está mais aberta. Escolha outra.");
+            return false;
+        }
+        fonte = atual;
+
+        _fonte = fonte;
+        _larguraAlvo = larguraAlvo;
+        _bitrateAlvo = bitrateMbps;
+        _noProcessador = forcarProcessador;
+
+        // Não faz sentido esticar a imagem além do tamanho original: só gastaria banda.
+        var largura = Math.Min(larguraAlvo, fonte.Largura);
+        var altura = (int)Math.Round((double)largura * fonte.Altura / fonte.Largura);
         largura -= largura % 2;
         altura -= altura % 2;
+        if (largura < 16 || altura < 16)
+        {
+            AoFalhar?.Invoke("Essa janela é pequena demais para transmitir.");
+            return false;
+        }
 
         Largura = largura;
         Altura = altura;
         Fps = fps;
 
-        var args = Ffmpeg.ArgumentosCaptura(tela, largura, altura, fps, bitrateMbps, forcarProcessador);
+        var args = Ffmpeg.ArgumentosCaptura(fonte, largura, altura, fps, bitrateMbps, forcarProcessador);
         _proc = Ffmpeg.Iniciar(args, redirecionarSaida: true);
         if (_proc is null)
         {
@@ -157,11 +171,11 @@ public sealed class Transmissor : IDisposable
         // Morrer logo no começo com a placa quase sempre é a placa recusando mais uma
         // codificação ao mesmo tempo (jogo gravando, outra transmissão aberta). Nesse caso
         // vale tentar pelo processador antes de desistir e reclamar com o usuário.
-        if (durou < 6 && !_noProcessador && _tela is not null && Ffmpeg.Detectar().EncoderPorPlaca)
+        if (durou < 6 && !_noProcessador && _fonte is not null && Ffmpeg.Detectar().EncoderPorPlaca)
         {
             Registro.Escrever("tentando de novo pelo processador");
             Ativo = false;
-            if (Iniciar(_tela, _larguraAlvo, Fps, _bitrateAlvo, forcarProcessador: true))
+            if (Iniciar(_fonte, _larguraAlvo, Fps, _bitrateAlvo, forcarProcessador: true))
             {
                 AoAvisar?.Invoke("A placa de vídeo estava ocupada. Continuei pelo processador.");
                 return;

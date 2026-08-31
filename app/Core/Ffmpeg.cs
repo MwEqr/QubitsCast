@@ -265,29 +265,37 @@ public static class Ffmpeg
         catch { return null; }
     }
 
-    /// <summary>Linha de comando que captura um monitor e joga H.264 no stdout.</summary>
-    public static string ArgumentosCaptura(Tela tela, int larguraSaida, int alturaSaida,
+    /// <summary>Linha de comando que captura a fonte escolhida e joga H.264 no stdout.</summary>
+    public static string ArgumentosCaptura(Fonte fonte, int larguraSaida, int alturaSaida,
                                            int fps, int bitrateMbps, bool forcarProcessador = false)
     {
         var cap = Detectar();
         if (forcarProcessador) cap = cap with { Encoder = "libx264" };
-        var precisaEscalar = larguraSaida != tela.Largura || alturaSaida != tela.Altura;
+        var precisaEscalar = larguraSaida != fonte.Largura || alturaSaida != fonte.Altura;
         var escala = precisaEscalar ? $",scale={larguraSaida}:{alturaSaida}:flags=fast_bilinear" : "";
 
         string entrada;
-        if (cap.UsarDdagrab)
+        if (fonte.EhJanela)
+        {
+            // Por identificador da janela, e não pelo título: título muda o tempo todo
+            // (aba do navegador, arquivo aberto no editor) e a captura se perderia.
+            entrada = $"-f gdigrab -framerate {fps} -draw_mouse 1 " +
+                      $"-i \"hwnd=0x{fonte.Hwnd.ToInt64():x}\" " +
+                      $"-vf \"format=bgra{escala},format=nv12\"";
+        }
+        else if (cap.UsarDdagrab)
         {
             // ddagrab entrega quadros na memória da placa; o download é obrigatório porque
             // este ffmpeg não deriva contexto CUDA a partir do D3D11 (medido: erro -40).
             entrada = "-init_hw_device d3d11va -filter_complex " +
-                      $"\"ddagrab=output_idx={tela.IndiceDxgi}:framerate={fps}," +
+                      $"\"ddagrab=output_idx={fonte.IndiceDxgi}:framerate={fps}," +
                       $"hwdownload,format=bgra{escala},format=nv12\"";
         }
         else
         {
             // GDI não sabe escolher monitor: recorta pela posição dele na área de trabalho.
-            entrada = $"-f gdigrab -framerate {fps} -offset_x {tela.X} -offset_y {tela.Y} " +
-                      $"-video_size {tela.Largura}x{tela.Altura} -draw_mouse 1 -i desktop " +
+            entrada = $"-f gdigrab -framerate {fps} -offset_x {fonte.X} -offset_y {fonte.Y} " +
+                      $"-video_size {fonte.Largura}x{fonte.Altura} -draw_mouse 1 -i desktop " +
                       $"-vf \"format=bgra{escala},format=nv12\"";
         }
 

@@ -62,6 +62,16 @@ public sealed class Ajustes
     public int Fps { get; set; } = 60;
     public int Bitrate { get; set; } = 8;          // Mbps
     public int MonitorIndice { get; set; }
+
+    /// <summary>Chave da fonte escolhida por último ("monitor:0" ou "janela:...").</summary>
+    public string FonteChave { get; set; } = "";
+
+    /// <summary>0 = sem som, 1 = som do computador, 2 = som de um programa.</summary>
+    public int ModoSom { get; set; } = 1;
+
+    /// <summary>Programa escolhido quando <see cref="ModoSom"/> é 2.</summary>
+    public string ProgramaDoSom { get; set; } = "";
+
     public bool CapturarSomDoSistema { get; set; } = true;
     public bool MicrofoneLigado { get; set; }
     public int VolumeSaida { get; set; } = 100;
@@ -114,6 +124,7 @@ public sealed class Ajustes
         Bitrate = Math.Clamp(Bitrate, 1, 60);
         VolumeSaida = Math.Clamp(VolumeSaida, 0, 100);
         MonitorIndice = Math.Max(0, MonitorIndice);
+        ModoSom = Math.Clamp(ModoSom, 0, 2);
         return this;
     }
 }

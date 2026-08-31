@@ -32,9 +32,12 @@ curl -sf "$SERVIDOR/saude" >/dev/null || { echo "servidor não responde"; exit 1
 LARGURA="${QCAST_LARGURA:-1280}"
 FPS="${QCAST_FPS:-30}"
 MBPS="${QCAST_MBPS:-4}"
+SEGUNDOS="${QCAST_SEGUNDOS:-26}"
+JANELA="${QCAST_JANELA:-}"      # vazio = tela inteira
 
-echo "== subindo o anfitrião (${LARGURA}px, ${FPS} fps, ${MBPS} Mbps)"
-"$EXE" --autoteste anfitriao "$SERVIDOR" "$SAIDA/anfitriao.txt" "$LARGURA" "$FPS" "$MBPS" &
+echo "== subindo o anfitrião (${LARGURA}px, ${FPS} fps, ${MBPS} Mbps${JANELA:+, janela \"$JANELA\"})"
+"$EXE" --autoteste anfitriao "$SERVIDOR" "$SAIDA/anfitriao.txt" \
+       "$LARGURA" "$FPS" "$MBPS" "$SEGUNDOS" ${JANELA:+"$JANELA"} &
 PID_ANFITRIAO=$!
 
 CODIGO=""
