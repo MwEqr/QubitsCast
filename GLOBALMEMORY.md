@@ -118,6 +118,25 @@ assiste não tem esse problema, porque a descida é 6 vezes maior.
 
 ---
 
+## 3.2 Publicar versão nova
+
+`publicar.ps1` faz tudo: sobe o número, compila, gera o instalador, envia, confere pelo
+endereço público e commita. O app consulta `/versao` ao abrir e a cada 6 h.
+
+- **Os `.ps1` do projeto são ASCII de propósito.** O PowerShell 5.1 lê arquivo UTF-8 sem BOM
+  como ANSI: acento no fonte chega embaralhado, e um regex com acento literal aborta o
+  script (aconteceu). O padrão de verificação é montado com `[char]0xC3`, não escrito.
+- **`Get-Content` + `Set-Content -Encoding UTF8` DESTRÓI acento** de arquivo UTF-8 sem BOM —
+  lê como ANSI e regrava a leitura errada. Foi assim que "área de trabalho" virou lixo dentro
+  do instalador, na tela que o usuário lê. Usar `[System.IO.File]::ReadAllText/WriteAllText`
+  com `UTF8Encoding($false)`, e o script confere no fim antes de deixar publicar.
+- **`Set-Content -Encoding UTF8` grava COM BOM**, e `JSON.parse` recusa o BOM: o `versao.json`
+  subiu certo e o servidor anunciava versão vazia. Grava sem BOM, e o servidor tolera.
+- **A verificação por HEAD compara o `Content-Length` com o tamanho local** — é o que separa
+  "subiu" de "está sendo servido".
+
+---
+
 ## 4. Protocolo
 
 WebSocket em `/ws`. Texto é JSON de controle (`criar`, `entrar`, `transmitir`, `microfone`,

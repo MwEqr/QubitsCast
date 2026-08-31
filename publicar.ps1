@@ -128,7 +128,9 @@ if ($anunciado.sha256 -ne $resumo) { throw 'o resumo publicado nao bate com o do
 
 # Confere que o arquivo que o link entrega e mesmo este, e nao um pedaco antigo em cache.
 $cabecalho = Invoke-WebRequest -Uri 'https://cast.qubitslab.com.br/baixar' -Method Head -TimeoutSec 30
-$tamanhoServido = [int64]$cabecalho.Headers['Content-Length'][0]
+# Select-Object e nao [0]: no PowerShell 5.1 o header vem como string, e [0] devolveria
+# o primeiro CARACTERE dela - "9" virava 57, o codigo ASCII do algarismo.
+$tamanhoServido = [int64]($cabecalho.Headers['Content-Length'] | Select-Object -First 1)
 if ($tamanhoServido -ne $tamanho) {
     throw "o link entrega $tamanhoServido bytes, mas o instalador tem $tamanho"
 }
