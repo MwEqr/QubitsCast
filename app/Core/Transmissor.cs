@@ -33,6 +33,9 @@ public sealed class Transmissor : IDisposable
     private bool _noProcessador;
     private long _inicioCaptura;
 
+    /// <summary>Última mensagem de falha mostrada, para não empilhar aviso em cima de aviso.</summary>
+    private string? _ultimaQueixa;
+
     public bool Ativo { get; private set; }
     public int Largura { get; private set; }
     public int Altura { get; private set; }
@@ -47,6 +50,12 @@ public sealed class Transmissor : IDisposable
     public event Action<string>? AoAvisar;
 
     public Transmissor(Sinal sinal) => _sinal = sinal;
+
+    private void Reclamar(string mensagem)
+    {
+        _ultimaQueixa = mensagem;
+        AoFalhar?.Invoke(mensagem);
+    }
 
     public bool Iniciar(Fonte fonte, int larguraAlvo, int fps, int bitrateMbps)
         => Iniciar(fonte, larguraAlvo, fps, bitrateMbps, forcarProcessador: false);
@@ -65,7 +74,7 @@ public sealed class Transmissor : IDisposable
         var atual = Janelas.Atualizar(fonte);
         if (atual is null)
         {
-            AoFalhar?.Invoke("Essa janela não está mais aberta. Escolha outra.");
+            Reclamar("Essa janela não está mais aberta. Escolha outra.");
             return false;
         }
         fonte = atual;
@@ -82,7 +91,7 @@ public sealed class Transmissor : IDisposable
         altura -= altura % 2;
         if (largura < 16 || altura < 16)
         {
-            AoFalhar?.Invoke("Essa janela é pequena demais para transmitir.");
+            Reclamar("Essa janela é pequena demais para transmitir.");
             return false;
         }
 
@@ -94,7 +103,7 @@ public sealed class Transmissor : IDisposable
         _proc = Ffmpeg.Iniciar(args, redirecionarSaida: true);
         if (_proc is null)
         {
-            AoFalhar?.Invoke("Não consegui iniciar a captura de tela.");
+            Reclamar("Não consegui iniciar a captura de tela.");
             return false;
         }
 
@@ -175,15 +184,21 @@ public sealed class Transmissor : IDisposable
         {
             Registro.Escrever("tentando de novo pelo processador");
             Ativo = false;
+            _ultimaQueixa = null;
+
             if (Iniciar(_fonte, _larguraAlvo, Fps, _bitrateAlvo, forcarProcessador: true))
             {
                 AoAvisar?.Invoke("A placa de vídeo estava ocupada. Continuei pelo processador.");
                 return;
             }
+
+            // A tentativa já explicou o que houve (janela fechada, por exemplo). Repetir uma
+            // mensagem genérica por cima só apagaria a informação boa da tela.
+            if (_ultimaQueixa is not null) return;
         }
 
         Ativo = false;
-        AoFalhar?.Invoke("A captura de tela parou. Tente iniciar de novo.");
+        Reclamar("A captura de tela parou. Tente iniciar de novo.");
     }
 
     private async Task LerErrosAsync(Process proc, CancellationToken ct)

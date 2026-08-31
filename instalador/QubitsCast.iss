@@ -4,7 +4,7 @@
 ; Instala na pasta do usuário de propósito: assim não pede permissão de administrador.
 
 #define MeuNome "QubitsCast"
-#define MeuVersao "1.0.0"
+#define MeuVersao "1.0.2"
 #define MeuAutor "QubitsLab"
 #define MeuExe "QubitsCast.exe"
 

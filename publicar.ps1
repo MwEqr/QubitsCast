@@ -1,13 +1,13 @@
-# Publica uma versão nova do QubitsCast.
+# Publica uma versao nova do QubitsCast.
 #
-# Faz tudo de uma vez: sobe o número da versão, compila, gera o instalador, calcula o
-# resumo, manda para o servidor e avisa os aplicativos instalados de que saiu versão nova.
-# Quem estiver com o app aberto vê o botão "Atualizar" aparecer sozinho.
+# Faz tudo de uma vez: sobe o numero da versao, compila, gera o instalador, calcula o
+# resumo, manda para o servidor e avisa os aplicativos instalados de que saiu versao nova.
+# Quem estiver com o app aberto ve o botao "Atualizar" aparecer sozinho.
 #
 #   powershell -ExecutionPolicy Bypass -File publicar.ps1 -Notas "o que mudou"
 #   powershell -ExecutionPolicy Bypass -File publicar.ps1 -Versao 1.2.0 -Notas "..."
 #
-# Sem -Versao, o último número sobe em um (1.0.3 vira 1.0.4).
+# Sem -Versao, o ultimo numero sobe em um (1.0.3 vira 1.0.4).
 
 param(
     [string]$Versao = '',
@@ -24,11 +24,18 @@ $instalador = Join-Path $raiz 'instalador\saida\QubitsCast-instalador.exe'
 
 function Passo($t) { Write-Host "`n=== $t" -ForegroundColor Cyan }
 
-# --------------------------------------------------------------- versão
+# --------------------------------------------------------------- versao
+# Os arquivos sao lidos e gravados em UTF-8 explicitamente. O padrao do PowerShell 5.1
+# le como ANSI e grava de volta como UTF-8, o que embaralha todo acento dentro do
+# instalador - e o texto errado aparece na tela de quem instala.
+$utf8 = New-Object System.Text.UTF8Encoding($false)   # sem BOM
+function LerTexto($p) { [System.IO.File]::ReadAllText($p, [System.Text.Encoding]::UTF8) }
+function GravarTexto($p, $t) { [System.IO.File]::WriteAllText($p, $t, $utf8) }
+
 Passo 'versao'
-[xml]$xml = Get-Content $csproj
-$no = $xml.Project.PropertyGroup | Where-Object { $_.Version } | Select-Object -First 1
-$atual = [string]$no.Version
+$textoCsproj = LerTexto $csproj
+if ($textoCsproj -notmatch '<Version>([\d.]+)</Version>') { throw 'nao achei <Version> no csproj' }
+$atual = $Matches[1]
 Write-Host "versao atual: $atual"
 
 if (-not $Versao) {
@@ -43,17 +50,32 @@ if ([version]$Versao -le [version]$atual) {
 
 Write-Host "versao nova:  $Versao"
 
-$no.Version = $Versao
-($xml.Project.PropertyGroup | Where-Object { $_.FileVersion } | Select-Object -First 1).FileVersion = "$Versao.0"
-($xml.Project.PropertyGroup | Where-Object { $_.AssemblyVersion } | Select-Object -First 1).AssemblyVersion = "$Versao.0"
-$xml.Save($csproj)
+$textoCsproj = [regex]::Replace($textoCsproj, '<Version>[\d.]+</Version>', "<Version>$Versao</Version>")
+$textoCsproj = [regex]::Replace($textoCsproj, '<FileVersion>[\d.]+</FileVersion>', "<FileVersion>$Versao.0</FileVersion>")
+$textoCsproj = [regex]::Replace($textoCsproj, '<AssemblyVersion>[\d.]+</AssemblyVersion>', "<AssemblyVersion>$Versao.0</AssemblyVersion>")
+GravarTexto $csproj $textoCsproj
 
 # O instalador carrega o mesmo numero, senao o Windows mostra versao velha em
 # "Aplicativos instalados" mesmo depois de atualizar.
 $iss = Join-Path $raiz 'instalador\QubitsCast.iss'
-$texto = Get-Content $iss -Raw
-$texto = [regex]::Replace($texto, '(#define MeuVersao ")[^"]+(")', "`${1}$Versao`${2}")
-Set-Content $iss $texto -Encoding UTF8 -NoNewline
+$textoIss = LerTexto $iss
+$textoIss = [regex]::Replace($textoIss, '(#define MeuVersao ")[^"]+(")', "`${1}$Versao`${2}")
+GravarTexto $iss $textoIss
+
+# Prova de que a acentuacao sobreviveu. A marca de estrago e um byte 0xC3 seguido de
+# outro byte alto: e o que aparece quando um texto UTF-8 foi lido como ANSI e regravado.
+#
+# O padrao e montado por codigo de caractere, e nao escrito literal, porque este proprio
+# arquivo e UTF-8 sem BOM: o PowerShell 5.1 le assim mesmo como ANSI, e um regex com
+# acento no fonte chegaria aqui ja embaralhado. Todo este script e ASCII por esse motivo.
+$marcaDeEstrago = [string][char]0xC3 + '[' + [char]0x80 + '-' + [char]0xBF + ']'
+foreach ($arquivo in @($csproj, $iss)) {
+    $conferido = LerTexto $arquivo
+    if ($conferido -match $marcaDeEstrago) {
+        throw "a acentuacao de $arquivo foi corrompida na gravacao - publicacao abortada"
+    }
+}
+Write-Host 'acentuacao conferida nos dois arquivos'
 
 # --------------------------------------------------------------- compilar
 Passo 'compilando'
@@ -82,7 +104,7 @@ $dados = [ordered]@{
 }
 $json = ($dados | ConvertTo-Json -Compress)
 $jsonLocal = Join-Path $env:TEMP 'qubitscast-versao.json'
-Set-Content $jsonLocal $json -Encoding UTF8 -NoNewline
+GravarTexto $jsonLocal $json   # sem BOM: JSON.parse recusa a marca invisivel do inicio
 & scp -q $jsonLocal "${Servidor}:/tmp/qubitscast-versao.json"
 if ($LASTEXITCODE -ne 0) { throw 'falhou ao enviar o arquivo de versao' }
 Remove-Item $jsonLocal -ErrorAction SilentlyContinue

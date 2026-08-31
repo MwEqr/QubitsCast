@@ -20,6 +20,17 @@ e comprimir, então roda leve mesmo em 1080p a 60 quadros por segundo.
 O servidor não guarda nada: repassa os pacotes de quem transmite para quem está na sala
 e esquece. A única coisa em memória é a lista de salas abertas.
 
+## O que dá para escolher
+
+**O que transmitir** — a tela inteira (qualquer um dos monitores) ou **uma janela só**. Na
+janela, o resto da tela não aparece: dá para deixar a conversa aberta ao lado sem que ela vá
+junto. Tela inteira passa pela placa de vídeo e aguenta 60 quadros; janela passa por GDI, que
+gasta mais processador e não enxerga jogo em tela cheia exclusiva.
+
+**Que som vai junto** — nenhum, o som do computador inteiro, ou **só o som de um programa**.
+A última opção depende de uma função que só existe no Windows 11 (compilação 20348 ou mais
+nova); em Windows 10 comum ela não aparece na lista, e o motivo fica no texto de ajuda.
+
 ## Qualidades
 
 | Opção | Uso de internet |
@@ -55,6 +66,24 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 
 Sai em `instalador\saida\QubitsCast-instalador.exe`. O instalador não pede permissão de
 administrador — instala na pasta do usuário.
+
+## Publicar uma versão nova
+
+Um comando faz tudo — sobe o número da versão, compila, gera o instalador, manda para o
+servidor, confere pelo endereço público e registra no git:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File publicar.ps1 -Notas "o que mudou"
+```
+
+Quem abrir o aplicativo depois disso vê o botão **Atualizar** na barra de cima; quem já
+estiver com ele aberto vê em até 6 horas. O app baixa, confere o resumo SHA-256 do arquivo e
+só então instala — e nunca instala sozinho no meio de uma transmissão.
+
+Para publicar um número específico: `-Versao 1.2.0`. Para não commitar: `-SemCommit`.
+
+> Os scripts `.ps1` deste projeto são ASCII de propósito. O PowerShell 5.1 lê arquivo UTF-8
+> sem BOM como ANSI, e um acento no fonte chega embaralhado — inclusive dentro de um regex.
 
 ## Servidor
 

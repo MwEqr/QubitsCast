@@ -1,5 +1,5 @@
 # Baixa o ffmpeg que o QubitsCast usa e deixa em instalador\ffmpeg\.
-# Não é versionado por causa do tamanho (mais de 100 MB).
+# Nao e versionado por causa do tamanho (mais de 100 MB).
 #
 #   powershell -ExecutionPolicy Bypass -File preparar-ffmpeg.ps1
 
@@ -8,7 +8,7 @@ $raiz = Split-Path -Parent $MyInvocation.MyCommand.Path
 $destino = Join-Path $raiz 'instalador\ffmpeg'
 $exe = Join-Path $destino 'ffmpeg.exe'
 
-# Versão 8.1 de propósito, não a mais nova: a 9.x exige driver NVIDIA 610 ou mais novo
+# Versao 8.1 de proposito, nao a mais nova: a 9.x exige driver NVIDIA 610 ou mais novo
 # e recusa o NVENC em placas com driver anterior, caindo para o processador sem avisar.
 $url = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n8.1-latest-win64-gpl-8.1.zip'
 

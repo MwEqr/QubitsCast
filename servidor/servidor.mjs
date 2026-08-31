@@ -470,8 +470,10 @@ const servidor = http.createServer((req, res) => {
   // O arquivo é escrito pelo publicar.ps1 e não é versionado — cada publicação o reescreve.
   if (caminho === '/versao') {
     try {
+      // O replace tira a marca de ordem de bytes: editor e script do Windows gravam
+      // esse caractere invisível no começo do arquivo, e o JSON.parse recusa por causa dele.
       const bruto = fs.readFileSync(path.join(AQUI, 'publico', 'versao.json'), 'utf8');
-      const dados = JSON.parse(bruto);
+      const dados = JSON.parse(bruto.replace(/^﻿/, ''));
       // O endereço do instalador é montado aqui, e não gravado no arquivo: assim trocar o
       // domínio do servidor não deixa o app baixando de um lugar que não existe mais.
       dados.url = `${SITE}/baixar`;

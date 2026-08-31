@@ -17,7 +17,12 @@ Criado em 30/08/2026.
 | `app/Core/Receptor.cs` | descompressão + entrega do último quadro |
 | `app/Core/Cores.cs` | conversão NV12 → BGRA |
 | `app/Core/Audio.cs` | captura (loopback e microfone) e reprodução, Opus |
+| `app/Core/Fontes.cs` | lista o que dá para transmitir: monitores e janelas abertas |
+| `app/Core/AudioPorApp.cs` | captura do som de um programa só (exige Windows 11) |
+| `app/Core/Atualizacao.cs` | procura, baixa, confere e instala versão nova |
+| `app/Core/Medidor.cs` | mede a subida da internet para escolher a qualidade |
 | `app/Core/Autoteste.cs` | modo sem interface que prova o caminho inteiro |
+| `publicar.ps1` | publica uma versão nova inteira, com um comando |
 | `servidor/servidor.mjs` | servidor de salas e retransmissão, Node puro, sem dependências |
 | `instalador/QubitsCast.iss` | Inno Setup, instala sem administrador |
 | `build.ps1` | compila e gera o instalador |
@@ -83,6 +88,16 @@ que é gitignorado.
 - **O nginx do painel é anterior à diretiva `http2 on;`** — usar `listen 443 ssl http2;`.
   E `nginx -t` dentro de pipe esconde o código de saída: o `kill -HUP` roda mesmo com a
   config quebrada, o nginx mantém a antiga e tudo parece ter dado certo.
+- **`gdigrab` aceita `-i "hwnd=0x..."`**, e é assim que a captura de uma janela é feita.
+  Por título (`title=`) o alvo se perde sozinho: título de navegador e de editor muda a
+  cada aba e a cada arquivo aberto. As opções do demuxer não listam `hwnd`, mas funciona
+  (testado: capturou a janela certa em 1920x1040).
+- **Captura do som de UM programa exige Windows 10 compilação 20348** (Windows 11 /
+  Server 2022) — a página `AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS` diz isso em
+  "Minimum supported client". A máquina do Yuri é 19045, então ali a opção não aparece.
+  O código está pronto (`AudioPorApp.cs`) e cai para o som do computador se a abertura
+  falhar, mas **o caminho feliz nunca foi executado aqui** — quando alguém com Windows 11
+  usar, é a primeira vez que roda de verdade.
 
 ---
 
