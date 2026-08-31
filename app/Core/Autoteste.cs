@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Text;
 
@@ -30,6 +31,7 @@ public static class Autoteste
                     args.Length > 7 ? int.Parse(args[7]) : 26,
                     args.Length > 8 ? args[8] : null),
                 "espectador" => await EspectadorAsync(args[2], args[3], args[4]),
+                "atualizacao" => await AtualizacaoAsync(args[2], args[3]),
                 _ => Erro("papel desconhecido: " + papel),
             };
         }
@@ -124,6 +126,75 @@ public static class Autoteste
         Anotar(relatorio, $"media-mbps={(amostras > 0 ? somaMbps / amostras : 0):0.00}");
         Anotar(relatorio, amostras > 0 ? "RESULTADO=ok" : "RESULTADO=nenhum quadro saiu");
         return amostras > 0 ? 0 : 3;
+    }
+
+    // ------------------------------------------------------------------ atualização
+
+    /// <summary>
+    /// Percorre o caminho da atualização até o ponto antes de instalar: pergunta ao
+    /// servidor, baixa o instalador e confere o resumo. Instalar de verdade fica de fora
+    /// porque trocaria o programa no meio do próprio teste.
+    /// </summary>
+    private static async Task<int> AtualizacaoAsync(string servidor, string relatorio)
+    {
+        File.WriteAllText(relatorio, "", Encoding.UTF8);
+        Anotar(relatorio, "papel=atualizacao");
+        Anotar(relatorio, "versao-instalada=" + Atualizacao.VersaoAtualTexto);
+
+        var achada = await Atualizacao.ProcurarAsync(servidor);
+        if (achada is null)
+        {
+            Anotar(relatorio, "RESULTADO=nenhuma versao nova (ou ja estou na mais nova)");
+            return 5;
+        }
+
+        Anotar(relatorio, $"versao-publicada={achada.Versao}");
+        Anotar(relatorio, $"endereco={achada.Url}");
+        Anotar(relatorio, $"resumo-anunciado={achada.Sha256}");
+        Anotar(relatorio, $"tamanho-anunciado={achada.Tamanho}");
+        if (!string.IsNullOrWhiteSpace(achada.Notas)) Anotar(relatorio, $"notas={achada.Notas}");
+
+        var marco = Stopwatch.StartNew();
+        var arquivo = await Atualizacao.BaixarAsync(achada,
+            new Progress<double>(p =>
+            {
+                if (p >= 100) Anotar(relatorio, "download=100%");
+            }));
+
+        if (arquivo is null)
+        {
+            Anotar(relatorio, "RESULTADO=o download falhou ou o resumo nao bateu");
+            return 6;
+        }
+
+        var tamanho = new FileInfo(arquivo).Length;
+        var mbps = tamanho * 8.0 / marco.Elapsed.TotalSeconds / 1e6;
+        Anotar(relatorio, $"baixado-em={arquivo}");
+        Anotar(relatorio, $"tamanho-baixado={tamanho}");
+        Anotar(relatorio, $"velocidade={mbps:0.0} Mb/s");
+
+        // Prova de que veio um instalador do Windows, e não uma página de erro com 200.
+        using (var f = File.OpenRead(arquivo))
+        {
+            var marca = new byte[2];
+            f.ReadExactly(marca);
+            var ehExecutavel = marca[0] == (byte)'M' && marca[1] == (byte)'Z';
+            Anotar(relatorio, $"e-executavel-windows={ehExecutavel}");
+            if (!ehExecutavel)
+            {
+                Anotar(relatorio, "RESULTADO=o arquivo baixado nao e um executavel");
+                return 7;
+            }
+        }
+
+        if (tamanho != achada.Tamanho && achada.Tamanho > 0)
+        {
+            Anotar(relatorio, $"RESULTADO=tamanho diferente do anunciado ({achada.Tamanho})");
+            return 8;
+        }
+
+        Anotar(relatorio, "RESULTADO=ok");
+        return 0;
     }
 
     // ------------------------------------------------------------------ espectador

@@ -44,9 +44,12 @@
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal"
                             shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                    <!-- Altura fixa: sem ela o texto encosta na borda da barra e a base das
+                         letras com perna ("p", "ç") fica cortada. -->
                     <Button x:Name="BotaoAtualizar" Click="Atualizar_Clique"
                             Style="{StaticResource BotaoBase}" Visibility="Collapsed"
-                            Padding="12,6" Margin="0,7,10,7" FontSize="12"
+                            Height="26" Padding="12,0" Margin="0,0,12,0" FontSize="12"
+                            VerticalAlignment="Center" VerticalContentAlignment="Center"
                             Background="{StaticResource Acento}" BorderBrush="{StaticResource Acento}"
                             Foreground="White" Content="Atualizar"
                             ToolTip="Baixar e instalar a versão nova"/>
