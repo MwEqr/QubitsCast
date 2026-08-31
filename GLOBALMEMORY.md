@@ -71,6 +71,35 @@ que é gitignorado.
   sem a máquina ser incapaz, e guardar isso deixaria o app lento para sempre.
 - **`hwmap=derive_device=cuda` não funciona neste build** (erro -40): o caminho é
   `ddagrab → hwdownload → scale → nv12 → nvenc`. `scale_d3d11` também falhou.
+- **Arquivo de teste leva nome único (GUID).** Com nome fixo, sobra ainda presa pelo ffmpeg
+  fazia o `File.Delete` lançar `IOException`, e a exceção era lida como "esta máquina não
+  consegue" — foi assim que a captura pela placa apareceu como indisponível sem motivo, e o
+  app rodou em modo lento mostrando "captura simples".
+- **`StartupUri` é processado pelo `Run()`, depois do `OnStartup`.** Sair mais cedo do
+  `OnStartup` não impede a janela de abrir; o modo `--autoteste` abria janela mesmo assim, e
+  ela era fotografada no lugar da janela de verdade. A janela agora é criada no código.
+- **`Application.StartupUri = null` lança `ArgumentNullException`** — não serve para
+  cancelar a abertura da janela.
+- **O nginx do painel é anterior à diretiva `http2 on;`** — usar `listen 443 ssl http2;`.
+  E `nginx -t` dentro de pipe esconde o código de saída: o `kill -HUP` roda mesmo com a
+  config quebrada, o nginx mantém a antiga e tudo parece ter dado certo.
+
+---
+
+## 3.1 A internet do Yuri (medida em 30/08/2026)
+
+| | |
+|---|---|
+| Subida (upload) até a vps-new | **3,1 Mb/s** |
+| Descida (download) | 19 Mb/s |
+| Latência até a VPS | 188 ms |
+
+Isso limita o que ele consegue **transmitir** a 720p30 (2 Mb/s), não o que o app aguenta: em
+rede local o app entrega 1080p60 com 59 quadros por segundo enviados e 53 recebidos. Quem
+assiste não tem esse problema, porque a descida é 6 vezes maior.
+
+**`scp` não serve para medir banda** — o SSH tem janela de fluxo própria e limita sozinho
+(deu 2,3 Mb/s onde o HTTP deu 3,1). Medir pelo endpoint `/medir` do próprio servidor.
 
 ---
 
