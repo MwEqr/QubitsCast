@@ -52,6 +52,9 @@ public partial class JanelaPrincipal : Window
     private VersaoPublicada? _versaoNova;
     private InfoTransmissao? _formatoAtual;
     private int _reducoes;
+    private int _segundosRuins;
+    private int _atrasadosAnteriores;
+    private bool _avisouRecepcaoRuim;
 
     public JanelaPrincipal()
     {
@@ -508,7 +511,11 @@ public partial class JanelaPrincipal : Window
             return;   // já está exibindo essa mesma transmissão
 
         _idTransmissorAtual = t.Id;
-        _reducoes = 0;   // transmissão nova começa do tamanho cheio
+        // Transmissão nova começa do tamanho cheio e sem histórico de reclamação.
+        _reducoes = 0;
+        _segundosRuins = 0;
+        _atrasadosAnteriores = 0;
+        _avisouRecepcaoRuim = false;
         var nome = sala.Participantes.FirstOrDefault(p => p.Id == t.Id)?.Apelido ?? "alguém";
         TextoVazio.Text = $"Conectando na tela de {nome}…";
         TextoVazio2.Text = $"{t.Largura}×{t.Altura} a {t.Fps} quadros por segundo";
@@ -626,8 +633,11 @@ public partial class JanelaPrincipal : Window
 
         _receptor = new Receptor();
         _receptor.AoMedir += s => Dispatcher.BeginInvoke(() =>
+        {
             AtualizarSelo($"recebendo  {s.Fps} fps  ·  {s.Mbps:0.0} Mb/s" +
-                          (s.Atrasados > 0 ? $"  ·  {s.Atrasados} perdidos" : "")));
+                          (s.Atrasados > 0 ? $"  ·  {s.Atrasados} perdidos" : ""));
+            AvaliarRecepcao(s, t.Fps);
+        });
         _receptor.AoNaoAcompanhar += () => Dispatcher.BeginInvoke(ReduzirExibicao);
         _receptor.AoPrimeiroQuadro += () => Dispatcher.BeginInvoke(() =>
         {
@@ -650,6 +660,29 @@ public partial class JanelaPrincipal : Window
             CompositionTarget.Rendering += AoRenderizar;
             _renderizandoLigado = true;
         }
+    }
+
+    /// <summary>
+    /// Separa "meu computador não dá conta" de "minha internet não dá conta", que pedem
+    /// coisas diferentes de quem está assistindo. A diferença está em onde o gargalo
+    /// aparece: quando é a máquina, os pacotes chegam e a fila enche (e isso vem pelo
+    /// evento de não acompanhar); quando é a internet, os quadros simplesmente não chegam.
+    /// </summary>
+    private void AvaliarRecepcao(EstatisticaRecepcao s, int fpsEsperado)
+    {
+        if (fpsEsperado <= 0 || _avisouRecepcaoRuim) return;
+
+        bool poucosQuadros = s.Fps < fpsEsperado * 0.6;
+        bool semPerdaLocal = s.Atrasados == _atrasadosAnteriores;
+        _atrasadosAnteriores = s.Atrasados;
+
+        // Precisa persistir: uma medida ruim isolada é oscilação normal de rede.
+        _segundosRuins = poucosQuadros && semPerdaLocal ? _segundosRuins + 1 : 0;
+        if (_segundosRuins < 6) return;
+
+        _avisouRecepcaoRuim = true;
+        MostrarAviso("A imagem está chegando picotada, e não é o seu computador: " +
+                     "é a internet — a sua ou a de quem está transmitindo.");
     }
 
     /// <summary>
