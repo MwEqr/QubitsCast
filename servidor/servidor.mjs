@@ -30,6 +30,13 @@ const MAX_POR_SALA = Number(process.env.MAX_POR_SALA || 10);
 const MAX_PACOTE = Number(process.env.MAX_PACOTE || 8 * 1024 * 1024); // 8 MB por quadro
 const SALA_OCIOSA_MS = Number(process.env.SALA_OCIOSA_MS || 60_000);
 
+// Quanto pode ficar esperando no soquete de cada espectador antes de começar a pular.
+// A 2 Mb/s, 768 KB são uns 3 segundos de vídeo — passou disso, o atraso já incomoda mais
+// do que a falha de um quadro. O valor antigo (24 MB) equivalia a mais de um minuto e meio
+// empilhado: quando chegava lá, a imagem já estava parada havia muito tempo.
+const FILA_SOQUETE_ALTA = Number(process.env.FILA_SOQUETE_ALTA || 768 * 1024);
+const FILA_SOQUETE_CHEIA = Number(process.env.FILA_SOQUETE_CHEIA || 6 * 1024 * 1024);
+
 // Tipos de pacote binário. Byte 0 = tipo, byte 1 = id de quem enviou (preenchido aqui).
 const PKT_VIDEO_PARAM = 1; // SPS/PPS — guardado e reenviado a quem chega depois
 const PKT_VIDEO_CHAVE = 2; // quadro-chave (IDR)
@@ -150,6 +157,8 @@ class Membro {
     this.sala = null;
     this.vivo = true;
     this.ultimoPing = Date.now();
+    this.pulados = 0;
+    this.puladosRelatados = 0;
   }
 
   texto(s) {
@@ -160,10 +169,27 @@ class Membro {
     this.texto(JSON.stringify(obj));
   }
 
+  /**
+   * Manda mídia para este participante, pulando o que ele não consegue acompanhar.
+   *
+   * O que se pula importa tanto quanto quando: quadro comum some sem quebrar nada, porque
+   * o próximo quadro-chave reconstrói a imagem inteira. Pular quadro-chave junto deixa a
+   * pessoa sem nada para reconstruir, e a imagem trava até o keyframe seguinte.
+   */
   binario(buf) {
-    // Descarta o participante que não consegue acompanhar, em vez de estourar a memória
-    // do servidor guardando quadro antigo que já não serve para nada.
-    if (this.soquete.writableLength > 24 * 1024 * 1024) return;
+    const acumulado = this.soquete.writableLength;
+    const tipo = buf[0];
+
+    if (acumulado > FILA_SOQUETE_ALTA) {
+      // Atraso alto: só passa o que reconstrói imagem.
+      if (tipo === PKT_VIDEO_INTER) { this.pulados++; return; }
+    }
+    if (acumulado > FILA_SOQUETE_CHEIA) {
+      // Nem quadro-chave cabe: a conexão dessa pessoa não está dando conta agora.
+      this.pulados++;
+      return;
+    }
+
     enviarQuadro(this.soquete, 2, buf);
   }
 
@@ -626,7 +652,17 @@ setInterval(() => {
       if (m.ultimoPing < limite) {
         sairDaSala(m);
         m.fechar();
-      } else enviarQuadro(m.soquete, 9, Buffer.alloc(0));
+      } else {
+        // Quem está perdendo quadro aparece no log: sem isso, "travou" chega como
+        // reclamação sem número nenhum para investigar.
+        if (m.pulados > m.puladosRelatados) {
+          log(`${sala.codigo}: ${m.apelido} nao acompanha ` +
+              `(+${m.pulados - m.puladosRelatados} pacotes pulados, ` +
+              `${Math.round(m.soquete.writableLength / 1024)} KB na fila)`);
+          m.puladosRelatados = m.pulados;
+        }
+        enviarQuadro(m.soquete, 9, Buffer.alloc(0));
+      }
     }
 }, 25_000).unref();
 

@@ -1,20 +1,38 @@
 using System.Diagnostics;
 using System.IO;
+using System.Threading.Channels;
 
 namespace QubitsCast.Core;
 
-public sealed record EstatisticaRecepcao(int Fps, double Mbps);
+public sealed record EstatisticaRecepcao(int Fps, double Mbps, int Atrasados);
 
 /// <summary>
 /// Recebe os pacotes de vídeo da sala, decodifica e deixa o último quadro pronto
 /// para a tela pegar. A tela lê no ritmo do monitor; aqui só se guarda o mais recente.
+///
+/// <para>
+/// Entre a rede e o decodificador existe uma fila, e ela é o ponto mais importante desta
+/// classe. Escrever direto no decodificador prende a thread que lê a rede quando a máquina
+/// não dá conta: o cano enche, a escrita trava, a leitura da rede para junto e o servidor
+/// acaba descartando tudo — inclusive quadro-chave, sem o qual a imagem nunca se recupera.
+/// Com a fila, quem está atrasado perde quadro solto e continua vendo.
+/// </para>
 /// </summary>
 public sealed class Receptor : IDisposable
 {
+    /// <summary>Meio segundo a 60 quadros: daqui para cima, quadro comum começa a ser pulado.</summary>
+    private const int FilaConfortavel = 30;
+
+    /// <summary>Um segundo e meio: daqui para cima, a fila é esvaziada e espera-se quadro-chave.</summary>
+    private const int FilaCheia = 90;
+
     private readonly object _trava = new();
     private Process? _proc;
     private CancellationTokenSource? _parar;
     private Stream? _entradaFfmpeg;
+
+    private Channel<(byte Tipo, byte[] Dados)>? _fila;
+    private int _pendentes;
 
     private byte[]? _quadroPronto;   // último quadro completo, para a tela
     private byte[]? _quadroEmUso;    // o que a tela pegou por último (volta para reuso)
@@ -22,6 +40,7 @@ public sealed class Receptor : IDisposable
 
     private bool _viuChave;
     private int _quadrosNoSegundo;
+    private int _atrasados;
     private long _bytesNoSegundo;
     private long _marcoSegundo;
 
@@ -29,10 +48,17 @@ public sealed class Receptor : IDisposable
     public int Altura { get; private set; }
     public bool Ativo { get; private set; }
 
+    /// <summary>Quantos pacotes foram pulados por não dar tempo de mostrar.</summary>
+    public int Atrasados => _atrasados;
+
     public event Action<EstatisticaRecepcao>? AoMedir;
     public event Action? AoPrimeiroQuadro;
 
+    /// <summary>Disparado quando a máquina não está acompanhando e vale reduzir o tamanho.</summary>
+    public event Action? AoNaoAcompanhar;
+
     private bool _avisouPrimeiro;
+    private bool _avisouLento;
 
     public bool Iniciar(int largura, int altura)
     {
@@ -56,13 +82,23 @@ public sealed class Receptor : IDisposable
         _entradaFfmpeg = _proc.StandardInput.BaseStream;
         _viuChave = false;
         _avisouPrimeiro = false;
+        _avisouLento = false;
         _quadroPronto = null;
         _quadroEmUso = null;
         _temNovo = false;
+        _pendentes = 0;
+        _atrasados = 0;
         _marcoSegundo = Stopwatch.GetTimestamp();
+
+        _fila = Channel.CreateUnbounded<(byte, byte[])>(new UnboundedChannelOptions
+        {
+            SingleReader = true,
+            SingleWriter = false,
+        });
 
         _parar = new CancellationTokenSource();
         var ct = _parar.Token;
+        _ = Task.Run(() => LacoAlimentacaoAsync(ct), ct);
         _ = Task.Run(() => LerQuadrosAsync(_proc, largura, altura, ct), ct);
         _ = Task.Run(() => LerErrosAsync(_proc, ct), ct);
 
@@ -76,6 +112,8 @@ public sealed class Receptor : IDisposable
         if (!Ativo && _proc is null) return;
         Ativo = false;
         try { _parar?.Cancel(); } catch { }
+        try { _fila?.Writer.TryComplete(); } catch { }
+        _fila = null;
         try { _entradaFfmpeg?.Dispose(); } catch { }
         _entradaFfmpeg = null;
         Ffmpeg.MatarSilencioso(_proc);
@@ -84,11 +122,14 @@ public sealed class Receptor : IDisposable
         Registro.Escrever("exibição parada");
     }
 
-    /// <summary>Entrega um pacote vindo da sala ao decodificador.</summary>
+    /// <summary>
+    /// Entrega um pacote vindo da sala. Nunca bloqueia: no pior caso o pacote é
+    /// descartado aqui mesmo, o que é muito melhor do que segurar a thread da rede.
+    /// </summary>
     public void Alimentar(byte tipo, byte[] dados)
     {
-        var saida = _entradaFfmpeg;
-        if (saida is null || !Ativo) return;
+        var fila = _fila;
+        if (fila is null || !Ativo) return;
 
         // Antes do primeiro quadro-chave, tudo que chega é pedaço de imagem sem começo:
         // mandar isso ao decodificador só produziria borrão verde.
@@ -98,15 +139,69 @@ public sealed class Receptor : IDisposable
             else if (tipo != Pacote.VideoParam) return;
         }
 
+        var pendentes = Volatile.Read(ref _pendentes);
+
+        if (pendentes > FilaCheia)
+        {
+            // Atraso grande demais para recuperar quadro a quadro: joga fora o que estava
+            // esperando e recomeça do próximo quadro-chave. Melhor pular para o agora do
+            // que arrastar meio minuto de atraso até o fim da transmissão.
+            if (tipo == Pacote.VideoInter) { _atrasados++; return; }
+            EsvaziarFila();
+            if (tipo != Pacote.VideoChave && tipo != Pacote.VideoParam) return;
+        }
+        else if (pendentes > FilaConfortavel && tipo == Pacote.VideoInter)
+        {
+            _atrasados++;
+            if (!_avisouLento)
+            {
+                _avisouLento = true;
+                Registro.Escrever("a máquina não está acompanhando a transmissão");
+                AoNaoAcompanhar?.Invoke();
+            }
+            return;
+        }
+
+        if (fila.Writer.TryWrite((tipo, dados)))
+            Interlocked.Increment(ref _pendentes);
+    }
+
+    private void EsvaziarFila()
+    {
+        var fila = _fila;
+        if (fila is null) return;
+        while (fila.Reader.TryRead(out _))
+        {
+            Interlocked.Decrement(ref _pendentes);
+            _atrasados++;
+        }
+        _viuChave = false;   // o que vier antes do próximo quadro-chave não serve
+        Registro.Escrever("fila de exibição esvaziada: esperando o próximo quadro-chave");
+    }
+
+    private async Task LacoAlimentacaoAsync(CancellationToken ct)
+    {
         try
         {
-            saida.Write(dados, 0, dados.Length);
-            saida.Flush();
-            _bytesNoSegundo += dados.Length;
+            var fila = _fila;
+            if (fila is null) return;
+
+            await foreach (var item in fila.Reader.ReadAllAsync(ct).ConfigureAwait(false))
+            {
+                Interlocked.Decrement(ref _pendentes);
+
+                var saida = _entradaFfmpeg;
+                if (saida is null) return;
+
+                await saida.WriteAsync(item.Dados, ct).ConfigureAwait(false);
+                await saida.FlushAsync(ct).ConfigureAwait(false);
+                _bytesNoSegundo += item.Dados.Length;
+            }
         }
+        catch (OperationCanceledException) { }
         catch (Exception e)
         {
-            Registro.Falha("Receptor.Alimentar", e);
+            Registro.Falha("Receptor.LacoAlimentacao", e);
             Ativo = false;
         }
     }
@@ -200,7 +295,7 @@ public sealed class Receptor : IDisposable
         _quadrosNoSegundo = 0;
         _bytesNoSegundo = 0;
         _marcoSegundo = agora;
-        AoMedir?.Invoke(new EstatisticaRecepcao(fps, mbps));
+        AoMedir?.Invoke(new EstatisticaRecepcao(fps, mbps, _atrasados));
     }
 
     public void Dispose() => Parar();

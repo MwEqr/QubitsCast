@@ -226,7 +226,7 @@ public static class Autoteste
             medidas++;
             somaFps += s.Fps;
             somaMbps += s.Mbps;
-            Anotar(relatorio, $"medida fps={s.Fps} mbps={s.Mbps:0.00}");
+            Anotar(relatorio, $"medida fps={s.Fps} mbps={s.Mbps:0.00} perdidos={s.Atrasados}");
         };
         receptor.AoPrimeiroQuadro += () => primeiroQuadro.TrySetResult(true);
 
@@ -283,6 +283,7 @@ public static class Autoteste
 
         Anotar(relatorio, $"media-fps={(medidas > 0 ? somaFps / medidas : 0)}");
         Anotar(relatorio, $"media-mbps={(medidas > 0 ? somaMbps / medidas : 0):0.00}");
+        Anotar(relatorio, $"total-perdidos={receptor.Atrasados}");
 
         bool ok = medidas > 0 && quadro is not null;
         Anotar(relatorio, ok ? "RESULTADO=ok" : "RESULTADO=falhou");

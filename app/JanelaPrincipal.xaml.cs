@@ -50,6 +50,8 @@ public partial class JanelaPrincipal : Window
     private bool _semPlaca;
     private bool _servidorConferido;
     private VersaoPublicada? _versaoNova;
+    private InfoTransmissao? _formatoAtual;
+    private int _reducoes;
 
     public JanelaPrincipal()
     {
@@ -506,6 +508,7 @@ public partial class JanelaPrincipal : Window
             return;   // já está exibindo essa mesma transmissão
 
         _idTransmissorAtual = t.Id;
+        _reducoes = 0;   // transmissão nova começa do tamanho cheio
         var nome = sala.Participantes.FirstOrDefault(p => p.Id == t.Id)?.Apelido ?? "alguém";
         TextoVazio.Text = $"Conectando na tela de {nome}…";
         TextoVazio2.Text = $"{t.Largura}×{t.Altura} a {t.Fps} quadros por segundo";
@@ -606,12 +609,12 @@ public partial class JanelaPrincipal : Window
 
     // ================================================================== exibição
 
-    private void IniciarExibicao(InfoTransmissao t)
+    private void IniciarExibicao(InfoTransmissao t, int tetoManual = 0)
     {
         PararExibicao();
 
         // Decodificar em tamanho maior que a janela só gastaria processador à toa.
-        int teto = ActualWidth > 1920 ? 2560 : 1920;
+        int teto = tetoManual > 0 ? tetoManual : (ActualWidth > 1920 ? 2560 : 1920);
         int largura = Math.Min(t.Largura, teto);
         int altura = t.Largura > 0
             ? (int)Math.Round((double)largura * t.Altura / t.Largura)
@@ -619,9 +622,13 @@ public partial class JanelaPrincipal : Window
         largura -= largura % 2;
         altura -= altura % 2;
 
+        _formatoAtual = t;
+
         _receptor = new Receptor();
         _receptor.AoMedir += s => Dispatcher.BeginInvoke(() =>
-            AtualizarSelo($"recebendo  {s.Fps} fps  ·  {s.Mbps:0.0} Mb/s"));
+            AtualizarSelo($"recebendo  {s.Fps} fps  ·  {s.Mbps:0.0} Mb/s" +
+                          (s.Atrasados > 0 ? $"  ·  {s.Atrasados} perdidos" : "")));
+        _receptor.AoNaoAcompanhar += () => Dispatcher.BeginInvoke(ReduzirExibicao);
         _receptor.AoPrimeiroQuadro += () => Dispatcher.BeginInvoke(() =>
         {
             AvisoVazio.Visibility = Visibility.Collapsed;
@@ -643,6 +650,26 @@ public partial class JanelaPrincipal : Window
             CompositionTarget.Rendering += AoRenderizar;
             _renderizandoLigado = true;
         }
+    }
+
+    /// <summary>
+    /// Quando a máquina de quem assiste não dá conta, diminui a imagem em vez de deixar
+    /// travar. Vale só duas vezes: além disso o problema não é tamanho, é outra coisa,
+    /// e continuar encolhendo só entregaria uma imagem ruim sem resolver nada.
+    /// </summary>
+    private void ReduzirExibicao()
+    {
+        if (_reducoes >= 2 || _receptor is null || _formatoAtual is null) return;
+
+        var novoTeto = Math.Max(640, _receptor.Largura * 2 / 3);
+        if (novoTeto >= _receptor.Largura) return;
+
+        _reducoes++;
+        Registro.Escrever($"reduzindo a exibição de {_receptor.Largura} para {novoTeto} de largura");
+        IniciarExibicao(_formatoAtual, novoTeto);
+
+        MostrarAviso("Seu computador não estava acompanhando. " +
+                     "Diminuí o tamanho da imagem para ela não travar.");
     }
 
     private void PararExibicao()
